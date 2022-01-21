@@ -1,0 +1,111 @@
+<script type="text/html" data-template-name="tak registration">
+    <div class="form-row">
+        <label for="node-input-latitude"><i class="fa fa-globe"></i> Latitude</label>
+        <input type="text" id="node-input-latitude" placeholder="degrees dd.ddddd">
+    </div>
+    <div class="form-row">
+        <label for="node-input-longitude"><i class="fa fa-globe"></i> Longitude</label>
+        <input type="text" id="node-input-longitude" placeholder="degrees dd.ddddd">
+    </div>
+    <div class="form-row">
+        <label for="node-input-callsign"><i class="fa fa-user-circle-o"></i> Callsign</label>
+        <input type="text" id="node-input-callsign" placeholder="Nickname">
+    </div>
+    <div class="form-row">
+        <label for="node-input-group"><i class="fa fa-users"></i> Group</label>
+        <input type="text" id="node-input-group" placeholder="Group (if any)">
+    </div>
+    <div class="form-row" id="node-timing">
+        <label for="node-once"><i class="fa fa-heartbeat"></i> Heartbeat</label>
+        Send heartbeat every
+        <input id="inject-time-interval-count" class="inject-time-count" value="30" type="text"/>
+        <select style="width:100px" id="inject-time-interval-units">
+            <option value="s">Seconds</option>
+            <option value="m">Minutes</option>
+            <option value="h">Hours</option>
+        </select><br/>
+        <input type="hidden" id="node-input-repeat">
+    </div>
+    <div class="form-row">
+        <label for="node-input-dphost"><i class="fa fa-globe"></i> DP-Host url:port</label>
+        <input type="text" id="node-input-dphost" placeholder="Data package url http://server:port">
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name">
+    </div>
+</script>
+<style>
+    .inject-time-count {
+        width: 40px !important;
+    }
+</style>
+
+<script type="text/javascript">
+    RED.nodes.registerType('tak registration',{
+        category: 'location',
+        color:"#C0DEED",
+        defaults: {
+            name: {value:""},
+            callsign: {value: ""},
+            group: {value: "Cyan"},
+            latitude: {value: ""},
+            longitude: {value: ""},
+            repeat: {value:"60", validate:function(v) { return ((v === "") || (RED.validators.number(v) && (v >= 0) && (v <= 2147483))) }},
+            dphost: {value:""}
+        },
+        icon: "debug.png",
+        inputs: 1,
+        outputs: 1,
+        paletteLabel: "TAK gateway",
+        label: function() {
+            return "TAK gateway" || this.name;
+        },
+        oneditprepare: function() {
+            var r = "s";
+            var c = this.repeat;
+            if (this.repeat % 60 === 0) { r = "m"; c = c/60; }
+            if (this.repeat % 1440 === 0) { r = "h"; c = c/60; }
+            $("#inject-time-interval-count").val(c);
+            $("#inject-time-interval-units").val(r);
+            $("#inject-time-interval-days").prop("disabled","disabled");
+        },
+        oneditsave: function() {
+            var repeat = "";
+            var count = $("#inject-time-interval-count").val();
+            var units = $("#inject-time-interval-units").val();
+            if (units == "s") {
+                repeat = count;
+            } else {
+                if (units == "m") {
+                    repeat = count * 60;
+                } else if (units == "h") {
+                    repeat = count * 60 * 60;
+                }
+            }
+            $("#node-input-repeat").val(repeat);
+        }
+    });
+</script>
+
+<script type="text/html" data-help-name="tak registration">
+    <p>Registers a TAK gateway node and sets up a heartbeat.</p>
+    <p>Works in conjunction with a TCP request node, set to point to the TAK server tcp address and port
+        (usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on <code>&lt;event/&gt;</code>.</p>
+    <p>It can also accepts files to be sent to the TAK server by sending a msg as follows:</p>
+    <h3>Inputs</h3>
+    <dl class="message-properties">
+        <dt>sendTo <span class="property-type">string|array</span></dt>
+        <dd>can either be an individual TAK callsign, an array of callsigns, or <b>broadcast</b>
+            to send to all users, or <b>public</b> to just upload the package to the TAK server.</dd>
+        <dt>topic <span class="property-type">string</span></dt>
+        <dd>the overall package name - IE what you want it to be called on the TAK device (keep it short).</dd>
+        <dt>attachments <span class="property-type">array of objects</span></dt>
+        <dd>each object must contain at least a <b>filename</b> (string) and <b>content</b> a buffer of the file/data.
+            eg <code>[{filename:"foo.kml", content: &lt;buffer of the file&gt;}]</code></dd>
+    </dl>
+    <h3>Details</h3>
+    <p>This should work almost directly with messages received from an email-in node for example -
+        but you will need to add the recipients in the sendTo property and may need to filter out
+        unwanted messages first.</p>
+</script>
