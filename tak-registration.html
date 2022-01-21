@@ -90,8 +90,8 @@
 
 <script type="text/html" data-help-name="tak registration">
     <p>Registers a TAK gateway node and sets up a heartbeat.</p>
-    <p>Works in conjunction with a TCP request node, set to point to the TAK server tcp address and port
-        (usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on <code>&lt;event/&gt;</code>.</p>
+    <p>This node must be used in conjunction with a TCP request node, set to point to the TAK server tcp address and port
+        (usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on <code>&lt;/event&gt;</code>.</p>
     <p>It can also accepts files to be sent to the TAK server by sending a msg as follows:</p>
     <h3>Inputs</h3>
     <dl class="message-properties">

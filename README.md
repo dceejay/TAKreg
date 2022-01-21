@@ -18,12 +18,12 @@ Usage
 
 Registers a TAK gateway node and sets up a heartbeat.
 
-Works in conjunction with a TCP request node, set to point to the TAK server tcp address and port
-(usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on "&lt;event/&gt;".
+Must be used in conjunction with a TCP request node, set to point to the TAK server tcp address and port
+(usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on "&lt;/event&gt;".
 
 It can also accepts files to be sent to the TAK server by sending a msg as follows:
 
-### Inputs
+### Input properties required
 
  -  **sendTo** - *string|array* - can either be an individual TAK callsign, an array of callsigns, or **broadcast**
 to send to all users, or **public** to just upload the package to the TAK server.
