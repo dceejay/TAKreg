@@ -34,6 +34,9 @@
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name">
     </div>
+    <div class="form-tips" id="pin-tip"><b>Note</b>: This node MUST be used in conjunction with a TCP request node,
+        configured to point to your TAK server tcp address and port (usually 8087 or 8089), set to return strings,
+        <i>keep connection open</i> mode, and split on "&lt;/event&gt;"</div>
 </script>
 <style>
     .inject-time-count {
