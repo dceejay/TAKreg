@@ -1,3 +1,4 @@
+const { methodToString } = require('adm-zip/util');
 
 module.exports = function(RED) {
     "use strict";
@@ -8,12 +9,16 @@ module.exports = function(RED) {
     const FormData = require('form-data')
     const { v4: uuidv4 } = require('uuid');
     const uuid = require('uuid');
+    const ver = require('./package.json').version;
 
     function TakRegistrationNode(n) {
         RED.nodes.createNode(this,n);
         this.group = n.group;
+        this.role = n.role || "Gateway";
+        this.type = n.type || "a-f-G-I-B";
         this.lat = n.latitude;
         this.lon = n.longitude;
+        this.alt = 9999999;
         this.callsign = n.callsign;
         this.repeat = n.repeat;
         this.host = n.dphost;
@@ -31,8 +36,11 @@ module.exports = function(RED) {
                 etime: new Date(Date.now() + 2000 * node.repeat).toISOString(),
                 lat: node.lat,
                 lon: node.lon,
+                alt: node.alt,
                 callsign: node.callsign,
                 group: node.group,
+                role: node.role,
+                type: node.type,
                 heartbeat: true
             });
         };
@@ -46,11 +54,11 @@ module.exports = function(RED) {
         };
 
         node.repeaterSetup();
-        setTimeout(sendIt, 2000);
+        setTimeout(sendIt, 2500);
 
-        this.on("input",function(msg) {
+        node.on("input",function(msg) {
             if (msg.heartbeat) {  // Register gateway and do the heartbeats
-                var template = `<event version="2.0" uid="${node.uuid}" type="a-f-G-I-B" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="9999999" ce="9999999" le="9999999"/><detail><takv os="${os.platform()}" version="4.1.0.231" device="${os.hostname()}" platform="ATAK-CIV"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="Gateway"/><status battery="99"/></detail></event>`;
+                var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/></detail></event>`;
                 node.send({payload:template});
                 node.status({fill:"green", shape:"dot", text: node.repeat/1000+"s - "+node.callsign});
                 return;
@@ -146,17 +154,64 @@ module.exports = function(RED) {
                         node.error(error.message,error);
                     })
             }
-            else if (typeof msg.payload === "string") { // Assume it's proper XML event so pass straight through
-                if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) {
+            else if (typeof msg.payload === "string" ) {
+                if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) { // Assume it's proper XML event so pass straight through
                     node.send(msg);
                 }
+                else if (msg.payload.trim().startsWith('$GPGGA')) { // maybe it's an NMEA string
+                    // console.log("It's NMEA",msg.payload);
+                    var nm = msg.payload.trim().split(',');
+                    if (nm[0] === '$GPGGA' && nm[6] > 0) {
+                        const la = parseInt(nm[2].substr(0,2)) + parseFloat(nm[2].substr(2))/60;
+                        node.lat = ((nm[3] === "N") ? la : -la).toFixed(6);
+                        const lo = parseInt(nm[4].substr(0,3)) + parseFloat(nm[4].substr(3))/60;
+                        node.lon = ((nm[5] === "E") ? lo : -lo).toFixed(6);
+                        node.alt = nm[9];
+                    }
+                }
             }
-            else { // Drop anything we don't handle yet.
+            // Handle a generic worldmap marker style as a normal marker
+            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
+                var d = new Date();
+                var st = d.toISOString();
+                var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
+                var et = Date.now() + ttl;
+                et = (new Date(et)).toISOString();
+                var tag ="#Worldmap";
+                if (msg.payload.layer) { tag = "#" + msg.payload.layer }
+                var type = msg.payload.type || "a-u-g-u";
+                if (!msg.payload.type && msg.payload.SIDC) {
+                    var s = msg.payload.SIDC.split('-')[0].toLowerCase();
+                    if (s.startsWith('s')) {
+                        type = s.split('').join('-').replace('s-','a-').replace('-p-','-');
+                    }
+                }
+                // console.log("TYPE",type)
+                msg.payload = `<event version="2.0" type="${type}" uid="${msg.payload.name}" time="${st}" start="${st}" stale="${et}" how="h-e">
+                    <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || 9999999.0)}" le="9999999.0" ce="9999999.0"/>
+                    <detail>
+                        <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>
+                        <track course="${msg.payload.bearing || 0}" speed="${parseInt(msg.payload.speed) || 0}"/>
+                        <contact callsign="${msg.payload.name}"/>
+                        <remarks source="NRedTAK">${tag}</remarks>
+                    </detail>
+                </event>`
+                msg.payload = msg.payload.replace(/>\s+</g, "><");
+                node.send(msg);
+            }
+            // Just has lat, lon (and alt) but no name - assume it's our local position we're updating
+            else if (typeof msg.payload === "object" && !msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
+                node.lat = msg.payload.lat;
+                node.lon = msg.payload.lon;
+                if (msg.payload.hasOwnProperty("alt")) { node.alt = parseInt(msg.payload.alt); }
+            }
+            // Drop anything we don't handle yet.
+            else {
                 node.log("Dropped: "+JSON.stringify(msg.payload));
             }
         });
 
-        this.on("close", function() {
+        node.on("close", function() {
             // var tim = new Date().toISOString();
             // var template = `<?xml version="1.0" encoding="utf-8" standalone="yes"?><event version="2.0" uid="${node.uuid}" type="t-x-d-d" how="h-g-i-g-o" time="${tim}" start="${tim}" stale="${tim}"><detail><link uid="${node.uuid}" relation="p-p" type="a-f-G-I-B" /></detail><point le="9999999.0" ce="9999999.0" hae="9999999.0" lon="0" lat="0" /></event>"`;
             // node.send({payload:template});  // This never happens in time so not useful

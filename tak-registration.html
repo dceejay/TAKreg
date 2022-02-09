@@ -13,7 +13,37 @@
     </div>
     <div class="form-row">
         <label for="node-input-group"><i class="fa fa-users"></i> Group</label>
-        <input type="text" id="node-input-group" placeholder="Group (if any)">
+        <!-- <input type="text" id="node-input-group" placeholder="Group (if any)"> -->
+        <select id="node-input-group">
+            <option value="Cyan">Cyan</option>
+            <option value="Yellow">Yellow</option>
+            <option value="Red">Red</option>
+            <option value="Blue">Blue</option>
+            <option value="Green">Green</option>
+            <option value="Orange">Orange</option>
+            <option value="Magenta">Magenta</option>
+            <option value="Maroon">Maroon</option>
+            <option value="Purple">Purple</option>
+            <option value="Dark Blue">Dark Blue</option>
+            <option value="Dark Green">Dark Green</option>
+            <option value="Teal">Teal</option>
+            <option value="Brown">Brown</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-role"><i class="fa fa-crosshairs"></i> Role</label>
+        <!-- <input type="text" id="node-input-group" placeholder="Group (if any)"> -->
+        <select id="node-input-role">
+            <option value="Gateway">Gateway</option>
+            <option value="Team Member">Team Member</option>
+            <option value="Team Lead">Team Lead</option>
+            <option value="HQ">HQ</option>
+            <option value="Sniper">Sniper</option>
+            <option value="Medic">Medic</option>
+            <option value="Forward Observer">Forward Observer</option>
+            <option value="RTO">RTO</option>
+            <option value="K9">K9</option>
+        </select>
     </div>
     <div class="form-row" id="node-timing">
         <label for="node-once"><i class="fa fa-heartbeat"></i> Heartbeat</label>
@@ -23,7 +53,7 @@
             <option value="s">Seconds</option>
             <option value="m">Minutes</option>
             <option value="h">Hours</option>
-        </select><br/>
+        </select>
         <input type="hidden" id="node-input-repeat">
     </div>
     <div class="form-row">
@@ -52,6 +82,7 @@
             name: {value:""},
             callsign: {value: ""},
             group: {value: "Cyan"},
+            role: {value: "Gateway"},
             latitude: {value: ""},
             longitude: {value: ""},
             repeat: {value:"60", validate:function(v) { return ((v === "") || (RED.validators.number(v) && (v >= 0) && (v <= 2147483))) }},
@@ -93,12 +124,13 @@
 
 <script type="text/html" data-help-name="tak registration">
     <p>Registers a TAK gateway node and sets up a heartbeat.</p>
-    <p>This node must be used in conjunction with a TCP request node, set to point to the TAK server tcp address and port
+    <p>Works in conjunction with a TCP request node, set to point to the TAK server tcp address and port
         (usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on <code>&lt;/event&gt;</code>.</p>
-    <p>It can also accepts files to be sent to the TAK server by sending a msg as follows:</p>
-    <h3>Inputs</h3>
+    <p>If the `msg.payload` is an XML string it will be passed directly though.</p>
+
+    <h3>Sending data packages...</h3>
     <dl class="message-properties">
-        <dt>sendTo <span class="property-type">string|array</span></dt>
+        <dt>sendTo <span class="property-type">string | array</span></dt>
         <dd>can either be an individual TAK callsign, an array of callsigns, or <b>broadcast</b>
             to send to all users, or <b>public</b> to just upload the package to the TAK server.</dd>
         <dt>topic <span class="property-type">string</span></dt>
@@ -106,6 +138,21 @@
         <dt>attachments <span class="property-type">array of objects</span></dt>
         <dd>each object must contain at least a <b>filename</b> (string) and <b>content</b> a buffer of the file/data.
             eg <code>[{filename:"foo.kml", content: &lt;buffer of the file&gt;}]</code></dd>
+    </dl>
+    <h3>Sending marker position...</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">object</span></dt>
+        <dd>a "standard" <b>node-red worldmap</b> format msg.payload containing `name, lat, lon, type or SIDC,
+            (alt), (speed), (bearing), (layer)`, where type is the CoT type eg a-f-g-u or the SIDC is
+            the standard mil 2525C code, eg SFGPU. The layer will get turned int a hastag which can then
+            be selected on/off in the TAK app.</dd>
+    </dl>
+
+    <h3>Updating gateway position...</h3>
+    <dl class="message-properties">
+        <dt>payload <span class="property-type">string | object</span></dt>
+        <dd>Either an NMEA string starting `$GPGGA` or an object containing `lat` and `lon` and
+            optional `alt` properties (but no name property).</dd>
     </dl>
     <h3>Details</h3>
     <p>This should work almost directly with messages received from an email-in node for example -
