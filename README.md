@@ -36,7 +36,7 @@ to send to all users, or **public** to just upload the package to the TAK server
 
 To create or update a simple marker send a msg with the following property
 
- - **payload** - *object* - a "standard" node-red worldmap format msg.payload containing `name, lat, lon, type or SIDC, (alt), (speed), (bearing), (layer)`, where type is the CoT type eg a-f-g-u or the SIDC is the standard mil 2525C code, eg SFGPU. The layer will get turned int a hastag which can then be selected on/off in the TAK app.
+ - **payload** - *object* - a "standard" node-red worldmap format msg.payload containing `name, lat, lon, cottype or SIDC, (alt), (speed), (bearing), (layer)`, where cottype is the CoT type eg a-f-g-u or the SIDC is the standard mil 2525C code, eg SFGPU. The layer will get turned int a hastag which can then be selected on/off in the TAK app.
 
 ### Updating gateway position...
 

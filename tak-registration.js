@@ -177,10 +177,15 @@ module.exports = function(RED) {
                 var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
                 var et = Date.now() + ttl;
                 et = (new Date(et)).toISOString();
-                var tag ="#Worldmap";
-                if (msg.payload.layer) { tag = "#" + msg.payload.layer }
-                var type = msg.payload.type || "a-u-g-u";
-                if (!msg.payload.type && msg.payload.SIDC) {
+                var tag = msg.payload.remarks || "";
+                if (msg.payload.tag) { tag += " " + msg.payload.tag }
+                if (msg.payload.layer) { tag += " #" + msg.payload.layer }
+                else { tag += " #Worldmap"; }
+                var type = msg.payload.cottype || "a-u-g-u";
+                if (!msg.payload.cottype && !msg.payload.SIDC && msg.payload.aistype) {
+                    msg.payload.SIDC = ais2sidc(msg.payload.aistype);
+                }
+                if (!msg.payload.cottype && msg.payload.SIDC) {
                     var s = msg.payload.SIDC.split('-')[0].toLowerCase();
                     if (s.startsWith('s')) {
                         type = s.split('').join('-').replace('s-','a-').replace('-p-','-');
@@ -218,6 +223,51 @@ module.exports = function(RED) {
             clearInterval(this.interval_id);
             if (RED.settings.verbose) { this.log(RED._("inject.stopped")); }
         });
+    }
+
+    var aisToSidc1 = {
+        4: "SFSPXA------",
+        5: "SFSPXM------",
+        6: "SFSPXMP-----",
+        7: "SFSPXMC-----",
+        8: "SFSPXMO-----",
+        9: "SFSPXM------"
+    }
+
+    var aisToSidc2 = {
+        30: "SFSPXF------",
+        31: "SFSPXMTO----",
+        32: "SFSPXMTO--NS",
+        33: "SFSPXFDR----",
+        34: "SFUPND------",
+        35: "SFSP--------",
+        36: "SFSPXR------",
+        37: "SFSPXA------",
+        40: "SFSPXA------", //-
+        50: "SFSPXM------", //-
+        52: "SFSPXMTU----",
+        53: "SFSPNS------",
+        55: "SFSPXL------",
+        58: "SFSPNM------",
+        60: "SFSPXMP-----", //-
+        70: "SFSPXMC-----", //-
+        71: "SFSPXMH-----",
+        72: "SFSPXMH-----",
+        73: "SFSPXMH-----",
+        74: "SFSPXMH-----",
+        80: "SFSPXMO-----", //-
+        90: "SFSPXM------", //-
+    }
+
+    var ais2sidc = function (aisType) {
+        //aisType = Number(aisType);
+        if (aisType >= 100) { return "GNMPOHTH----"; }
+        aisType = aisToSidc2[aisType];
+        if (aisType && isNaN(aisType)) { return aisType; }
+        aisType = parseInt(aisType / 10);
+        aisType = aisToSidc1[aisType];
+        if (aisType && isNaN(aisType)) { return aisType; }
+        return "SFSPXM------";
     }
 
     RED.nodes.registerType("tak registration",TakRegistrationNode);
