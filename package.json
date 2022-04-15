@@ -1,28 +1,33 @@
 {
-    "name"          : "node-red-contrib-tak-registration",
-    "version"       : "0.2.1",
-    "description"   : "A Node-RED node to register to TAK and to help wrap files as datapackages to send to TAK",
-    "dependencies"  : {
+    "name": "node-red-contrib-tak-registration",
+    "version": "0.3.0",
+    "description": "A Node-RED node to register to TAK and to help wrap files as datapackages to send to TAK",
+    "dependencies": {
+        "@turf/turf": "^6.5.0",
         "adm-zip": "^0.5.9",
-        "axios": "^0.25.0",
+        "axios": "^0.26.1",
         "form-data": "^4.0.0",
         "uuid": "^8.3.2"
     },
     "bundledDependencies": [
+        "@turf/turf",
         "adm-zip",
         "axios",
         "form-data",
         "uuid"
     ],
-    "repository" : {
-        "type":"git",
-        "url":"https://github.com/dceejay/takreg/tree/master/"
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/dceejay/takreg/tree/master/"
     },
     "license": "Apache-2.0",
-    "keywords": [ "TAK", "node-red" ],
-    "node-red" : {
+    "keywords": [
+        "TAK",
+        "node-red"
+    ],
+    "node-red": {
         "version": ">=2.0.0",
-        "nodes" : {
+        "nodes": {
             "tak registration": "tak-registration.js"
         }
     },

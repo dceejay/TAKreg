@@ -126,7 +126,7 @@
     <p>Registers a TAK gateway node and sets up a heartbeat.</p>
     <p>Works in conjunction with a TCP request node, set to point to the TAK server tcp address and port
         (usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on <code>&lt;/event&gt;</code>.</p>
-    <p>If the `msg.payload` is an XML string it will be passed directly though.</p>
+    <p>If the <code>msg.payload</code> is an XML string it will be passed directly though.</p>
 
     <h3>Sending data packages...</h3>
     <dl class="message-properties">
@@ -142,20 +142,23 @@
     <h3>Sending marker position...</h3>
     <dl class="message-properties">
         <dt>payload <span class="property-type">object</span></dt>
-        <dd>a "standard" <b>node-red worldmap</b> format msg.payload containing `name, lat, lon, cottype or SIDC,
-            (alt), (speed), (bearing), (layer)`, where cottype is the CoT type eg a-f-g-u or the SIDC is
-            the standard mil 2525C code, eg SFGPU. The layer will get turned int a hastag which can then
-            be selected on/off in the TAK app.</dd>
+        <dd>a "standard" <b>node-red worldmap</b> format msg.payload containing `name, lat, lon, SIDC or cottype or aistype,
+            (alt), (speed), (bearing), (layer)`, where SIDC is the standard mil 2525C code, eg SFGPU, or cottype is the
+            CoT type, eg a-f-g-u, or aistype is the AIS type code, eg 80 for a tanker. The layer will get turned into a hashtag
+            which can then be selected on/off in the TAK app layers control.</dd>
     </dl>
 
     <h3>Updating gateway position...</h3>
     <dl class="message-properties">
         <dt>payload <span class="property-type">string | object</span></dt>
-        <dd>Either an NMEA string starting `$GPGGA` or an object containing `lat` and `lon` and
-            optional `alt` properties (but no name property).</dd>
+        <dd>Either an NMEA string starting `$GPGGA`, for example from a locally attached serial GPS, or an object
+            containing `lat` and `lon` and optional `alt` properties (but no name property).</dd>
     </dl>
     <h3>Details</h3>
     <p>This should work almost directly with messages received from an email-in node for example -
         but you will need to add the recipients in the sendTo property and may need to filter out
         unwanted messages first.</p>
+    <p>As well as accepting simple worldmap type marker object it will accept "draw" actions from the
+        worldmap drawing layer and convert them to CoT objects for display.</p>
+    </p>
 </script>

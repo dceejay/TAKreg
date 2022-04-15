@@ -9,6 +9,7 @@ module.exports = function(RED) {
     const FormData = require('form-data')
     const { v4: uuidv4 } = require('uuid');
     const uuid = require('uuid');
+    const turf = require("@turf/turf");
     const ver = require('./package.json').version;
 
     function TakRegistrationNode(n) {
@@ -18,17 +19,45 @@ module.exports = function(RED) {
         this.type = n.type || "a-f-G-I-B";
         this.lat = n.latitude;
         this.lon = n.longitude;
-        this.alt = 9999999;
         this.callsign = n.callsign;
         this.repeat = n.repeat;
         this.host = n.dphost;
         this.uuid = "GATEWAY-"+(crypto.createHash('md5').update(Buffer.from(os.hostname())).digest('hex')).slice(0,16);
         var node = this;
+        const invalid = "9999999.0";
+        this.alt = invalid;
 
         if (node.repeat > 2147483) {
             node.error("TAK Heartbeat interval is too long.");
             delete node.repeat;
         }
+
+        var convertWMtoKMLColour = function(colour,opacity) {
+            if (opacity == undefined) { opacity = 100; }
+            var alfa = parseInt(opacity * 255 / 100).toString(16);
+            return alfa + colour;
+        };
+
+        var convertWMtoCOTColour = function(colour,opacity) {
+            var c;
+            if (opacity != undefined) {
+                c = Buffer.from(parseInt(opacity * 255 / 100).toString(16) + colour, "hex");
+            }
+            else {
+                c = Buffer.from("FF" + colour, "hex");
+            }
+            return c.readInt32BE()
+        };
+
+        var findCentroidOfPoints = function(points) {
+            if (points.length < 4) { // pad if necessary (needs 4 points minimum)
+                points.push(points[2]);
+                points.unshift(points[0]);
+            }
+            var poly = turf.polygon([points]);
+            var centroid = turf.centroid(poly);
+            return centroid;
+        };
 
         var sendIt = function() {
             node.emit("input", {
@@ -60,10 +89,10 @@ module.exports = function(RED) {
             if (msg.heartbeat) {  // Register gateway and do the heartbeats
                 var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/></detail></event>`;
                 node.send({payload:template});
-                node.status({fill:"green", shape:"dot", text: node.repeat/1000+"s - "+node.callsign});
+                node.status({fill:"green", shape:"dot", text:node.repeat/1000+"s - "+node.callsign});
                 return;
             }
-            // If there are attachments handle them first.
+            // If there are attachments handle them first. (Datapackage)
             if (msg.hasOwnProperty("attachments") && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
                 if (!msg.sendTo) { node.error("Missing 'sendTo' user TAK callsign property.",msg); return; }
                 var UUID = uuid.v5(msg.topic,'d5d4a57d-48fb-58b6-93b8-d9fde658481a');
@@ -154,6 +183,7 @@ module.exports = function(RED) {
                         node.error(error.message,error);
                     })
             }
+            // Otherwise if it's a string maybe it's raw cot xml - or NMEA from GPS
             else if (typeof msg.payload === "string" ) {
                 if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) { // Assume it's proper XML event so pass straight through
                     node.send(msg);
@@ -170,46 +200,167 @@ module.exports = function(RED) {
                     }
                 }
             }
-            // Handle a generic worldmap marker style as a normal marker
-            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
-                var d = new Date();
-                var st = d.toISOString();
-                var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
-                var et = Date.now() + ttl;
-                et = (new Date(et)).toISOString();
-                var tag = msg.payload.remarks || "";
-                if (msg.payload.tag) { tag += " " + msg.payload.tag }
-                if (msg.payload.layer) { tag += " #" + msg.payload.layer }
-                else { tag += " #Worldmap"; }
-                var type = msg.payload.cottype || "a-u-g-u";
-                if (!msg.payload.cottype && !msg.payload.SIDC && msg.payload.aistype) {
-                    msg.payload.SIDC = ais2sidc(msg.payload.aistype);
-                }
-                if (!msg.payload.cottype && msg.payload.SIDC) {
-                    var s = msg.payload.SIDC.split('-')[0].toLowerCase();
-                    if (s.startsWith('s')) {
-                        type = s.split('').join('-').replace('s-','a-').replace('-p-','-');
-                    }
-                }
-                // console.log("TYPE",type)
-                msg.payload = `<event version="2.0" type="${type}" uid="${msg.payload.name}" time="${st}" start="${st}" stale="${et}" how="h-e">
-                    <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || 9999999.0)}" le="9999999.0" ce="9999999.0"/>
-                    <detail>
-                        <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>
-                        <track course="${msg.payload.bearing || 0}" speed="${parseInt(msg.payload.speed) || 0}"/>
-                        <contact callsign="${msg.payload.name}"/>
-                        <remarks source="NRedTAK">${tag}</remarks>
-                    </detail>
-                </event>`
-                msg.payload = msg.payload.replace(/>\s+</g, "><");
-                node.send(msg);
-            }
             // Just has lat, lon (and alt) but no name - assume it's our local position we're updating
             else if (typeof msg.payload === "object" && !msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
                 node.lat = msg.payload.lat;
                 node.lon = msg.payload.lon;
                 if (msg.payload.hasOwnProperty("alt")) { node.alt = parseInt(msg.payload.alt); }
             }
+            // Handle a generic worldmap style object
+            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("name") ) {
+                var shapeXML = ``;
+                var d = new Date();
+                var st = d.toISOString();
+                var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
+                var tag = msg.payload.remarks || "";
+                if (msg.payload.tag) { tag += " " + msg.payload.tag }
+                if (msg.payload.layer) { tag += " #" + msg.payload.layer }
+                else { tag += " #Worldmap"; }
+
+                // Handle simple markers
+                if (msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
+                    var type = msg.payload.cottype || "a-u-g-u";
+                    if (!msg.payload.cottype && !msg.payload.SIDC && msg.payload.aistype) {
+                        msg.payload.SIDC = ais2sidc(msg.payload.aistype);
+                    }
+                    if (!msg.payload.cottype && msg.payload.SIDC) {
+                        var s = msg.payload.SIDC.split('-')[0].toLowerCase();
+                        if (s.startsWith('s')) {
+                            type = s.split('').join('-').replace('s-','a-').replace('-p-','-');
+                        }
+                    }
+                    // console.log("TYPE",type)
+                }
+                // Handle Worldmap drawing shapes
+                if (msg.payload.hasOwnProperty("action") && msg.payload.action === "draw") {
+                    ttl = 24*60*60*1000;  /// set TTL to 1 day for shapes...
+
+                    var shape = {
+                        "strokeColor": (msg.payload.options.color || "910000").replace('#', ''),
+                        "fillColor": (msg.payload.options.color || "910000").replace('#', ''),
+                        "fillOpacity": msg.payload.options.opacity * 100 || 50,
+                        "strokeWeight": msg.payload.options.weight || 2
+                    };
+
+                    if ("radius" in msg.payload) {
+                        // Ellipse
+                        shape.type = "ellipse";
+                        shape.radius = {
+                            "major": msg.payload.radius,
+                            "minor": msg.payload.radius
+                        };
+                    }
+                    else if ("line" in msg.payload) {
+                        // Line
+                        delete shape.fillColor;
+                        delete shape.fillOpacity;
+                        shape.type = "line";
+                        shape.points = [];
+                        var lineCentPoints = [];
+
+                        for (var p = 0; p < msg.payload.line.length; p++) {
+                            shape.points.push({
+                                lat: msg.payload.line[p].lat,
+                                lon: msg.payload.line[p].lng
+                            });
+                            lineCentPoints.push([msg.payload.line[p].lat, msg.payload.line[p].lng]);
+                        }
+                        // Find the Centroid of the object.
+                        lineCentPoints.push([msg.payload.line[0].lat, msg.payload.line[0].lng]);
+                        var lineCent = findCentroidOfPoints(lineCentPoints);
+                        msg.payload.lat = lineCent.geometry.coordinates[0];
+                        msg.payload.lon = lineCent.geometry.coordinates[1];
+                    }
+                    else if ("area" in msg.payload) {
+                        // Polygon / Rectangle
+                        shape.type = "poly";
+                        shape.points = [];
+                        var polyCentPoints = [];
+                        for (var a = 0; a < msg.payload.area.length; a++) {
+                            shape.points.push({
+                                lat: msg.payload.area[a].lat,
+                                lon: msg.payload.area[a].lng
+                            });
+                            polyCentPoints.push([msg.payload.area[a].lat, msg.payload.area[a].lng]);
+                        }
+                        shape.points.push({
+                            lat: msg.payload.area[0].lat,
+                            lon: msg.payload.area[0].lng
+                        });
+                        // Find the Centroid of the object.
+                        polyCentPoints.push([msg.payload.area[0].lat, msg.payload.area[0].lng]);
+                        var polyCent = findCentroidOfPoints(polyCentPoints);
+                        msg.payload.lat = polyCent.geometry.coordinates[0];
+                        msg.payload.lon = polyCent.geometry.coordinates[1];
+                    }
+                    // console.log("SHAPE",shape)
+
+                    if (shape.type === 'ellipse') {
+                        type = "u-d-c-c";
+
+                        shapeXML = `
+                        <shape>
+                        <ellipse major="${shape.radius.major}" minor="${shape.radius.minor}" angle="360" />
+                        <link relation="p-c" uid="${msg.payload.name}.Style" type="b-x-KmlStyle">
+                        <Style>
+                        <LineStyle>
+                            <color>${convertWMtoKMLColour(shape.strokeColor)}</color>
+                            <width>${shape.weight || 2.0}</width>
+                        </LineStyle>
+                        <PolyStyle>
+                            <color>${convertWMtoKMLColour(shape.fillColor,shape.fillOpacity)}</color>
+                        </PolyStyle>
+                        </Style>
+                        </link>
+                        </shape>`;
+                    }
+                    else if (shape.type === 'line' || shape.type === 'poly') {
+                        var linkArrayXML = "";
+
+                        for (var l = 0; l < shape.points.length; l++) {
+                            // linkArrayXML += `<link uid="${msg.payload.name}.l" point="${shape.points[l].lat},${shape.points[l].lon},${shape.points[l].alt || invalid}"/>\n`;
+                            linkArrayXML += `<link point="${shape.points[l].lat},${shape.points[l].lon}"/>\n`;
+                        }
+
+                        shapeXML = `
+                        ${linkArrayXML}
+                        <strokeColor value="${convertWMtoCOTColour(shape.strokeColor)}"/>
+                        <strokeWeight value="${shape.weight || 2.0}"/>
+                        <strokeStyle value="solid"/>
+                        <color value="${convertWMtoCOTColour(shape.strokeColor)}"/>
+                        <labels_on value="false"/>`;
+
+                        if (shape.type === 'line') {
+                            type = "u-d-f";
+                        }
+
+                        if (shape.type === 'poly') {
+                            shapeXML += `<fillColor value="${convertWMtoCOTColour(shape.fillColor,shape.fillOpacity)}"/>`;
+                            type = "u-d-f";
+                            if (shape.points.length === 4) {
+                                type = "u-d-r";
+                            }
+                        }
+                    }
+                }
+
+                var et = Date.now() + ttl;
+                et = (new Date(et)).toISOString();
+
+                msg.payload = `<event version="2.0" uid="${msg.payload.name}" type="${type}" time="${st}" start="${st}" stale="${et}" how="h-e">
+                    <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999.0" ce="9999999.0"/>
+                    <detail>
+                        <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>
+                        <track course="${msg.payload.bearing || 0}" speed="${parseInt(msg.payload.speed) || 0}"/>
+                        <contact callsign="${msg.payload.name}"/>
+                        <remarks source="NRedTAK">${tag}</remarks>
+                        ${shapeXML}
+                    </detail>
+                </event>`
+                msg.payload = msg.payload.replace(/>\s+</g, "><");
+                node.send(msg);
+            }
+
             // Drop anything we don't handle yet.
             else {
                 node.log("Dropped: "+JSON.stringify(msg.payload));
@@ -270,5 +421,5 @@ module.exports = function(RED) {
         return "SFSPXM------";
     }
 
-    RED.nodes.registerType("tak registration",TakRegistrationNode);
+    RED.nodes.registerType("tak registration", TakRegistrationNode);
 };
