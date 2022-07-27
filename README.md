@@ -41,7 +41,7 @@ to send to all users, or **public** to just upload the package to the TAK server
 
 To create or update a simple marker send a msg with the following property
 
- - **payload** - *object* - a "standard" node-red worldmap format msg.payload containing `name, lat, lon, cottype or SIDC, (alt), (speed), (bearing), (layer)`, where `cottype` is the CoT type eg a-f-g-u, or `SIDC` is the standard mil 2525C code, eg SFGPU. The `layer` will get turned into a hashtag which can then be selected on/off in the TAK app layers control.
+ - **payload** - *object* - a "standard" node-red worldmap format msg.payload containing `name, lat, lon, SIDC or cottype or aistype, (alt), (speed), (bearing), (layer), (remarks)`, where `SIDC` is the standard mil 2525C code, eg SFGPU, `cottype` is the CoT type, eg a-f-g-u, or `aistype` is the AIS ship type number, eg 80 for a tanker. The `layer` will get turned into a hashtag which can then be selected on/off in the TAK app layers control, and any `remarks` will get added to the CoT remarks field.
 
 ### Sending drawing layer...
 
