@@ -14,9 +14,10 @@ module.exports = function(RED) {
 
     function TakRegistrationNode(n) {
         RED.nodes.createNode(this,n);
+        const invalid = "9999999.0";
         this.group = n.group;
         this.role = n.role || "Gateway";
-        this.type = n.type || "a-f-G-I-B";
+        this.ntype = n.ntype || "a-f-G-I-B";
         this.lat = n.latitude;
         this.lon = n.longitude;
         this.callsign = n.callsign;
@@ -24,8 +25,13 @@ module.exports = function(RED) {
         this.host = n.dphost;
         this.uuid = "GATEWAY-"+(crypto.createHash('md5').update(Buffer.from(os.hostname())).digest('hex')).slice(0,16);
         var node = this;
-        const invalid = "9999999.0";
-        this.alt = invalid;
+        node.alt = invalid;
+        var globalContext = this.context().global;
+        var g = {};
+        g[node.uuid] = node.callsign;
+        globalContext.set("_takgatewayid",g);
+
+        if (node.role !== "Gateway") (node.ntype = "a-f-G-U-C")
 
         if (node.repeat > 2147483) {
             node.error("TAK Heartbeat interval is too long.");
@@ -69,7 +75,7 @@ module.exports = function(RED) {
                 callsign: node.callsign,
                 group: node.group,
                 role: node.role,
-                type: node.type,
+                type: node.ntype,
                 heartbeat: true
             });
         };
@@ -161,7 +167,7 @@ module.exports = function(RED) {
                                     const stale = new Date(new Date().getTime() + (10000)).toISOString();
 
                                     var m = `<event version="2.0" uid="${uuidv4()}" type="b-f-t-r" how="h-e" time="${start}" start="${start}" stale="${stale}">
-                                        <point lat="${msg.lat}" lon="${msg.lon}" hae="9999999" ce="9999999" le="9999999" />
+                                        <point lat="${msg.lat}" lon="${msg.lon}" hae="9999999.0" ce="9999999.0" le="9999999.0" />
                                         <detail>
                                         <fileshare filename="${fname}" senderUrl="${node.host}/Marti/sync/content?hash=${msg.hash}" sizeInBytes="${msg.len}" sha256="${msg.hash}" senderUid="${msg.uid}" senderCallsign="${msg.from}" name="${fnam}" />`
                                     if (msg.sendTo !== "broadcast") {
