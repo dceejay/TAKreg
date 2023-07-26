@@ -1,4 +1,5 @@
 const { methodToString } = require('adm-zip/util');
+const { isArray } = require('util');
 
 module.exports = function(RED) {
     "use strict";
@@ -11,6 +12,7 @@ module.exports = function(RED) {
     const uuid = require('uuid');
     const turf = require("@turf/turf");
     const ver = require('./package.json').version;
+    const teamList = ["Cyan","Red","Green","Blue","Magenta","Yellow","Orange","Maroon","Purple","Dark Blue","Dark Green","Teal","Brown"];
 
     function TakRegistrationNode(n) {
         RED.nodes.createNode(this,n);
@@ -30,8 +32,11 @@ module.exports = function(RED) {
         var g = {};
         g[node.uuid] = node.callsign;
         globalContext.set("_takgatewayid",g);
+        var gr = {};
+        gr[node.callsign] = node.uuid;
+        globalContext.set("_takgatewaycs",gr);
 
-        if (node.role !== "Gateway") (node.ntype = "a-f-G-U-C")
+        if (node.role !== "Gateway") { node.ntype = "a-f-G-U-C" }
 
         if (node.repeat > 2147483) {
             node.error("TAK Heartbeat interval is too long.");
@@ -189,7 +194,7 @@ module.exports = function(RED) {
                         node.error(error.message,error);
                     })
             }
-            // Otherwise if it's a string maybe it's raw cot xml - or NMEA from GPS
+            // Otherwise if it's a string maybe it's raw cot xml - or NMEA from GPS - or maybe a simple chat message
             else if (typeof msg.payload === "string" ) {
                 if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) { // Assume it's proper XML event so pass straight through
                     node.send(msg);
@@ -203,6 +208,43 @@ module.exports = function(RED) {
                         const lo = parseInt(nm[4].substr(0,3)) + parseFloat(nm[4].substr(3))/60;
                         node.lon = ((nm[5] === "E") ? lo : -lo).toFixed(6);
                         node.alt = nm[9];
+                    }
+                }
+                else if (msg.hasOwnProperty("sendTo")) {
+                    // simple text payload and no attachments so guess it's a chat message...
+                    // node.log("Geochat to " + msg.sendTo);
+                    if (!Array.isArray(msg.sendTo)) { msg.sendTo = msg.sendTo.split(','); }
+                    const start = new Date().toISOString();
+                    const stale = new Date(new Date().getTime() + (10000)).toISOString();
+                    const mid = uuidv4();
+                    var type = "a-f-G-I-B";
+                    var par = '';
+
+                    for (var t=0; t < msg.sendTo.length; t++) {
+                        var m = RED.util.cloneMessage(msg);
+                        const to = m.sendTo[t];
+                        m.sendTo = to;
+                        const toid = globalContext.get("_takgatewaycs")[m.sendTo] || m.sendTo;
+                        const ma = `<marti><dest callsign="${m.sendTo}"/></marti>`;
+                        if (m.sendTo === "broadcast") { m.sendTo = "All Chat Rooms"; }
+                        if (m.sendTo === "All Chat Rooms") {  ma = ""; }
+                        if (teamList.includes(m.sendTo)) { par = 'parent="TeamGroups"'; }
+
+                        var xm = `<event version="2.0" uid="GeoChat.${node.uuid}.${toid}.${mid}" type="b-t-f" time="${start}" start="${start}" stale="${stale}" how="h-g-i-g-o">
+        <point lat="0.0" lon="0.0" hae="9999999.0" ce="9999999.0" le="9999999.0"/>
+        <detail>
+            <__chat ${par} groupOwner="false" messageId="${mid}" chatroom="${m.sendTo}" id="${toid}" senderCallsign="${node.callsign}">
+                <chatgrp uid0="${node.uuid}" uid1="${toid}" id="${toid}"/>
+            </__chat>
+            <link uid="${node.uuid}" type="${type}" relation="p-p"/>
+            <remarks source="BAO.F.ATAK.${node.uuid}" to="${toid}" time="${start}">${msg.payload}</remarks>
+            ${ma}
+            <track speed="0.0" course="0.0"/>
+        </detail>
+    </event>`;
+                        // console.log(xm);
+                        m.payload = xm.replace(/>\s+</g, "><");
+                        node.send(m);
                     }
                 }
             }

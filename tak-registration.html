@@ -139,6 +139,16 @@
         <dd>each object must contain at least a <b>filename</b> (string) and <b>content</b> a buffer of the file/data.
             eg <code>[{filename:"foo.kml", content: &lt;buffer of the file&gt;}]</code></dd>
     </dl>
+
+    <h3>Sending simple GeoChat messages...</h3>
+    <dl class="message-properties">
+        <dt>sendTo <span class="property-type">string | array</span></dt>
+        <dd>can either be an individual TAK callsign, a comma separted list of callsigns, an array of callsigns,
+            or <b>broadcast</b> to send to all users.</dd>
+        <dt>payload <span class="property-type">string</span></dt>
+        <dd>the text of the message to send.</dd>
+    </dl>
+
     <h3>Sending marker position...</h3>
     <dl class="message-properties">
         <dt>payload <span class="property-type">object</span></dt>
