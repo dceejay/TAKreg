@@ -25,7 +25,7 @@ module.exports = function(RED) {
         this.callsign = n.callsign;
         this.repeat = n.repeat;
         this.host = n.dphost;
-        this.uuid = "GATEWAY-"+(crypto.createHash('md5').update(Buffer.from(os.hostname())).digest('hex')).slice(0,16);
+        this.uuid = "GATEWAY-"+(crypto.createHash('md5').update(Buffer.from(this.id)).digest('hex')).slice(0,16);
         var node = this;
         node.alt = invalid;
         var globalContext = this.context().global;
@@ -225,13 +225,13 @@ module.exports = function(RED) {
                         const to = m.sendTo[t];
                         m.sendTo = to;
                         const toid = globalContext.get("_takgatewaycs")[m.sendTo] || m.sendTo;
-                        const ma = `<marti><dest callsign="${m.sendTo}"/></marti>`;
+                        var ma = `<marti><dest callsign="${m.sendTo}"/></marti>`;
                         if (m.sendTo === "broadcast") { m.sendTo = "All Chat Rooms"; }
                         if (m.sendTo === "All Chat Rooms") {  ma = ""; }
                         if (teamList.includes(m.sendTo)) { par = 'parent="TeamGroups"'; }
 
                         var xm = `<event version="2.0" uid="GeoChat.${node.uuid}.${toid}.${mid}" type="b-t-f" time="${start}" start="${start}" stale="${stale}" how="h-g-i-g-o">
-        <point lat="0.0" lon="0.0" hae="9999999.0" ce="9999999.0" le="9999999.0"/>
+        <point lat="${node.lat}" lon="${node.lon}" hae="9999999.0" ce="9999999.0" le="9999999.0"/>
         <detail>
             <__chat ${par} groupOwner="false" messageId="${mid}" chatroom="${m.sendTo}" id="${toid}" senderCallsign="${node.callsign}">
                 <chatgrp uid0="${node.uuid}" uid1="${toid}" id="${toid}"/>

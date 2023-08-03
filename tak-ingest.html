@@ -1,0 +1,40 @@
+<script type="text/html" data-template-name="tak ingest">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name">
+    </div>
+    <div class="form-tips" id="pin-tip"><b>Note</b>: This node MUST be used in conjunction with a TCP request node,
+        configured to point to your TAK server tcp address and port (usually 8087 or 8089), set to return strings,
+        <i>keep connection open</i> mode, and split on "&lt;/event&gt;"</div>
+</script>
+<style>
+    .inject-time-count {
+        width: 40px !important;
+    }
+</style>
+
+<script type="text/javascript">
+    RED.nodes.registerType('tak ingest',{
+        category: 'location',
+        color:"#C0DEED",
+        defaults: {
+            name: {value:""}
+        },
+        icon: "debug.png",
+        inputs: 1,
+        outputs: 1,
+        paletteLabel: "TAK ingest",
+        label: function() {
+            return "TAK ingest" || this.name;
+        }
+    });
+</script>
+
+<script type="text/html" data-help-name="tak ingest">
+    <p>Receives xml event messages from a TAK server and converts them to a
+        JSON object for further processing.</p>
+    <p>It also registers any events that have a callsign and uid to two global objects
+        <code>_takgatewaycs</code> and <code>_takgatewayId</code> that can be used
+        as look ups for other messages.</p>
+    <p>It also sets <code>msg.topic</code> to the event type to make switching easier.</p>
+</script>
