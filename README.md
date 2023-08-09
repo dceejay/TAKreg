@@ -13,14 +13,18 @@ directory - typically `~/.node-red`
 
     npm i node-red-contrib-tak-registration
 
-## Usage
+## TAK-Registration Node Usage
 
 Registers a TAK gateway node and sets up a heartbeat.
 
 It must be connected to a TCP request node, configured to point to the TAK server tcp address and port
 (usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on "&lt;/event&gt;".
 
+![TAK out and in Image](https://github.com/dceejay/pages/blob/master/TAKinout.png?raw=true)
+
 It can send various types of messages to TAK.
+
+It should be configured with a name, and location.
 
 As it registers to the gateway it should be possible for other team members to send messages and markers to the gateway.
 
@@ -28,12 +32,18 @@ As it registers to the gateway it should be possible for other team members to s
 
 If the `msg.payload` is an XML string it will be passed directly though.
 
+### Simple GeoChat messages
+
+requires a `msg` containing the following properties
+
+- **sendTo** - *string|array* - can either be an individual TAK callsign, a comma separted list of callsigns, an array of callsigns, or **broadcast** to send to all users.
+- **payload** - *string* - the text of the message to send.
+
 ### Sending data packages...
 
 requires a `msg` containing the following properties
 
- - **sendTo** - *string|array* - can either be an individual TAK callsign, an array of callsigns, or **broadcast**
-to send to all users, or **public** to just upload the package to the TAK server.
+ - **sendTo** - *string|array* - can either be an individual TAK callsign, an array of callsigns, or **broadcast** to send to all users, or **public** to just upload the package to the TAK server.
  - **topic** - *string* - the overall package name - IE what you want it to be called on the TAK device (keep it short).
  - **attachments** - *array of objects* - each object must contain at least a **filename** (string) and **content** a buffer of the file/data, for example `[{filename:"foo.kml", content: <buffer of the file>}]`
 
@@ -58,3 +68,11 @@ To update the location of the gateway dynamically the node can accept a payload
 ### Details
 
 This should work almost directly with messages received from an email-in node for example - but you will need to add the recipients in the sendTo property and may need to filter out unwanted messages first.
+
+## TAK-Ingest Node Usage
+
+This node can accept input direct from a TCP request node, configured to point to the TAK server tcp address and port (usually 8087 or 8089), set to return strings, *keep connection open* mode, and split on "&lt;/event&gt;". This can be same TCP node as used by the TAK-registration node above.
+
+It will produce a well formatted JSON object containing the event.
+
+It can also accept input from a UDP node configured to listen to *multicast* on address 239.2.3.1. port 6969. The JSON object produced contain similar information but formatted/organised differently.
