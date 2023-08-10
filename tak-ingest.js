@@ -74,17 +74,17 @@ module.exports = function(RED) {
             }
             msg.payload = fastXmlParser.parse(msg.payload, fastXmlOptions);
             // Add any unique ID/callsigns to some global variables just in case it's useful for later.
-            if (msg.payload?.event?.detail?.contact?.attr?.callsign && msg.payload?.event?.attr?.uid) {
+            if (msg.payload?.event?.detail?.contact?.callsign && msg.payload?.event?.uid) {
                 var a = global.get("_takgatewaycs") || {};
-                var c = a[msg.payload.event.detail.contact.attr.callsign];
-                a[msg.payload.event.detail.contact.attr.callsign] = msg.payload.event.attr.uid;
+                var c = a[msg.payload.event.detail.contact.callsign];
+                a[msg.payload.event.detail.contact.callsign] = msg.payload.event.uid;
                 global.set("_takgatewaycs", a);
                 var b = global.get("_takgatewayid") || {};
                 if (c) { delete b[c]; }
-                b[msg.payload.event.attr.uid] = msg.payload.event.detail.contact.attr.callsign;
+                b[msg.payload.event.uid] = msg.payload.event.detail.contact.callsign;
                 global.set("_takgatewayid", b);
             }
-            if (msg.payload?.event?.attr?.type) { msg.topic = msg.payload?.event?.attr?.type; }
+            if (msg.payload?.event?.type) { msg.topic = msg.payload?.event?.type; }
             node.send(msg);
         });
 
