@@ -1,4 +1,4 @@
-var fastXmlParser = require('fast-xml-parser');
+const { XMLParser, XMLBuilder, XMLValidator} = require("fast-xml-parser");
 var Long = require('long').Long;
 var protobuf = require('protobufjs');
 var path = require('path');
@@ -17,6 +17,7 @@ module.exports = function(RED) {
         RED.nodes.createNode(this,n);
         var node = this;
         var global = this.context().global;
+        const parser = new XMLParser(fastXmlOptions);
 
         node.on("input",function(msg) {
             if (Buffer.isBuffer(msg.payload)) {
@@ -72,7 +73,7 @@ module.exports = function(RED) {
                 }
                 return;
             }
-            msg.payload = fastXmlParser.parse(msg.payload, fastXmlOptions);
+            msg.payload = parser.parse(msg.payload);
             // Add any unique ID/callsigns to some global variables just in case it's useful for later.
             if (msg.payload?.event?.detail?.contact?.callsign && msg.payload?.event?.uid) {
                 var a = global.get("_takgatewaycs") || {};
