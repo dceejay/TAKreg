@@ -9,7 +9,7 @@ module.exports = function(RED) {
     "use strict";
     const fastXmlOptions = {
         attributeNamePrefix: "",
-        // attrNodeName: "attr",
+        // attributesGroupName: "attr",
         ignoreAttributes: false,
     };
 
