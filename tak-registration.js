@@ -73,7 +73,7 @@ module.exports = function(RED) {
         var sendIt = function() {
             node.emit("input", {
                 time: new Date().toISOString(),
-                etime: new Date(Date.now() + 2000 * node.repeat).toISOString(),
+                etime: new Date(Date.now() + (2 * node.repeat)).toISOString(),
                 lat: node.lat,
                 lon: node.lon,
                 alt: node.alt,
@@ -277,8 +277,13 @@ module.exports = function(RED) {
                             type = s.split('').join('-').replace('s-','a-').replace('-p-','-');
                         }
                     }
-                    // console.log("TYPE",type)
+                    if (msg.payload.icon === 'fa-circle fa-fw') {
+                        type = 'b-m-p-s-m';
+                        shapeXML = '<color argb="' + convertWMtoCOTColour(msg.payload.iconColor.replace('#', '')) + '"/>';
+                        shapeXML = shapeXML+'<usericon iconsetpath="COT_MAPPING_SPOTMAP/b-m-p-s-m/-16711681"/>';
+                    }
                 }
+
                 // Handle Worldmap drawing shapes
                 if (msg.payload.hasOwnProperty("action") && msg.payload.action === "draw") {
                     ttl = 24*60*60*1000;  /// set TTL to 1 day for shapes...
@@ -342,7 +347,6 @@ module.exports = function(RED) {
                         msg.payload.lon = polyCent.geometry.coordinates[1];
                     }
                     // console.log("SHAPE",shape)
-
                     if (shape.type === 'ellipse') {
                         type = "u-d-c-c";
 
