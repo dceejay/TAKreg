@@ -35,6 +35,7 @@ module.exports = function(RED) {
         var gr = {};
         gr[node.callsign] = node.uuid;
         globalContext.set("_takgatewaycs",gr);
+        globalContext.set("_takdphost",node.host);
 
         if (node.role !== "Gateway") { node.ntype = "a-f-G-U-C" }
 
@@ -99,7 +100,7 @@ module.exports = function(RED) {
         node.on("input",function(msg) {
             if (msg.heartbeat) {  // Register gateway and do the heartbeats
                 var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/></detail></event>`;
-                node.send({payload:template});
+                node.send({payload:template, topic:msg.type});
                 node.status({fill:"green", shape:"dot", text:node.repeat/1000+"s - "+node.callsign});
                 return;
             }
@@ -183,6 +184,7 @@ module.exports = function(RED) {
                                     m += '</detail></event>';
                                     node.log( "DP: " + node.host + "/Marti/sync/content?hash=" + msg.hash );
                                     msg.payload = m.replace(/>\s+</g, "><");
+                                    msg.topic = "b-f-t-r";
                                     node.send(msg);
                                 }
                             })
@@ -197,6 +199,7 @@ module.exports = function(RED) {
             // Otherwise if it's a string maybe it's raw cot xml - or NMEA from GPS - or maybe a simple chat message
             else if (typeof msg.payload === "string" ) {
                 if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) { // Assume it's proper XML event so pass straight through
+                    msg.topic = msg.payload.split('type="')[1].split('"')[0];
                     node.send(msg);
                 }
                 else if (msg.payload.trim().startsWith('$GPGGA')) { // maybe it's an NMEA string
@@ -244,6 +247,7 @@ module.exports = function(RED) {
     </event>`;
                         // console.log(xm);
                         m.payload = xm.replace(/>\s+</g, "><");
+                        m.topic = "b-t-f";
                         node.send(m);
                     }
                 }
@@ -410,6 +414,7 @@ module.exports = function(RED) {
                     </detail>
                 </event>`
                 msg.payload = msg.payload.replace(/>\s+</g, "><");
+                msg.topic = type;
                 node.send(msg);
             }
 
