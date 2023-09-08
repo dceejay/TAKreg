@@ -407,7 +407,7 @@ module.exports = function(RED) {
                     <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999.0" ce="9999999.0"/>
                     <detail>
                         <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>
-                        <track course="${msg.payload.bearing || 0}" speed="${parseInt(msg.payload.speed) || 0}"/>
+                        <track course="${msg.payload.bearing || 9999999.0}" speed="${parseInt(msg.payload.speed) || 0}"/>
                         <contact callsign="${msg.payload.name}"/>
                         <remarks source="NRedTAK">${tag}</remarks>
                         ${shapeXML}
@@ -415,6 +415,29 @@ module.exports = function(RED) {
                 </event>`
                 msg.payload = msg.payload.replace(/>\s+</g, "><");
                 msg.topic = type;
+                node.send(msg);
+            }
+
+            // Maybe a simple event json update (eg from an ingest - tweak and send back)
+            // Note this is not 100% reverse of the ingest... but seems to work mostly...
+            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("event") ) {
+                const ev = msg.payload.event;
+                msg.topic = ev.type;
+                msg.payload = `<event version="${ev.version}" uid="${ev.uid}" type="${ev.type}" time="${ev.time}" start="${ev.start}" stale="${ev.stale}" how="${ev.how}">
+                    <point lat="${ev.point.lat || 0}" lon="${ev.point.lon || 0}" hae="${ev.detail?.height?.value || ev.point.hae || 9999999.0}" le="${ev.point.le}" ce="${ev.point.ce}"/>
+                    <detail>
+                    <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>`
+                    if (ev.detail?.track) {
+                        msg.payload += `<track speed="${ev.detail.track.speed}" course="${ev.detail.track.course}"/>`;
+                    }
+                    if (ev.detail?.color) {
+                        msg.payload += `<color argb="${ev.detail.color.argb}"/>`;
+                    }
+                msg.payload += `<contact callsign="${ev.detail?.contact?.callsign}"/>
+                    <remarks source="${node.callsign}">${msg.remarks || ev.detail?.remarks}</remarks>
+                    </detail>
+                    </event>`
+                msg.payload = msg.payload.replace(/>\s+</g, "><");
                 node.send(msg);
             }
 
