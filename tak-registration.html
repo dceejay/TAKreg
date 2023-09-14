@@ -58,7 +58,7 @@
     </div>
     <div class="form-row">
         <label for="node-input-dphost"><i class="fa fa-globe"></i> DP-Host url:port</label>
-        <input type="text" id="node-input-dphost" placeholder="Data package url http://server:port">
+        <input type="text" id="node-input-dphost" placeholder="Data package server url http://server:port">
     </div>
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -66,7 +66,7 @@
     </div>
     <div class="form-tips" id="pin-tip"><b>Note</b>: This node MUST be used in conjunction with a TCP request node,
         configured to point to your TAK server tcp address and port (usually 8087 or 8089), set to return strings,
-        <i>keep connection open</i> mode, and split on "&lt;/event&gt;"</div>
+        <i>keep connection open</i> mode, and split on <code>&lt;/event&gt;</code></div>
 </script>
 <style>
     .inject-time-count {
@@ -138,7 +138,14 @@
         <dt>attachments <span class="property-type">array of objects</span></dt>
         <dd>each object must contain at least a <b>filename</b> (string) and <b>content</b> a buffer of the file/data.
             eg <code>[{filename:"foo.kml", content: &lt;buffer of the file&gt;}]</code></dd>
+        <dt>from  <span class="property-type">string</span></dt>
+        <dd>(optional) callsign of the person sending the file - defaults to the gateway node callsign.</dd>
+        <dt>lat  <span class="property-type">number | (string)</span></dt>
+        <dd>(optional) latitude of the marker for the file.</dd>
+        <dt>lon  <span class="property-type">number | (string)</span></dt>
+        <dd>(optional) longitude of the marker for the file.</dd>
     </dl>
+    If you just need to send a single file then you can use <code>msg.filename</code> to set the filename and the <code>msg.payload</code> should be a binary buffer.
 
     <h3>Sending simple GeoChat messages...</h3>
     <dl class="message-properties">

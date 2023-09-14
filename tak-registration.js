@@ -1,7 +1,7 @@
 const { methodToString } = require('adm-zip/util');
 const { isArray } = require('util');
 
-module.exports = function(RED) {
+module.exports = function (RED) {
     "use strict";
     const os = require('os');
     const AdmZip = require('adm-zip');
@@ -12,10 +12,10 @@ module.exports = function(RED) {
     const uuid = require('uuid');
     const turf = require("@turf/turf");
     const ver = require('./package.json').version;
-    const teamList = ["Cyan","Red","Green","Blue","Magenta","Yellow","Orange","Maroon","Purple","Dark Blue","Dark Green","Teal","Brown"];
+    const teamList = ["Cyan", "Red", "Green", "Blue", "Magenta", "Yellow", "Orange", "Maroon", "Purple", "Dark Blue", "Dark Green", "Teal", "Brown"];
 
     function TakRegistrationNode(n) {
-        RED.nodes.createNode(this,n);
+        RED.nodes.createNode(this, n);
         const invalid = "9999999.0";
         this.group = n.group;
         this.role = n.role || "Gateway";
@@ -25,17 +25,17 @@ module.exports = function(RED) {
         this.callsign = n.callsign;
         this.repeat = n.repeat;
         this.host = n.dphost;
-        this.uuid = "GATEWAY-"+(crypto.createHash('md5').update(Buffer.from(this.id)).digest('hex')).slice(0,16);
+        this.uuid = "GATEWAY-" + (crypto.createHash('md5').update(Buffer.from(this.id)).digest('hex')).slice(0, 16);
         var node = this;
         node.alt = invalid;
         var globalContext = this.context().global;
         var g = {};
         g[node.uuid] = node.callsign;
-        globalContext.set("_takgatewayid",g);
+        globalContext.set("_takgatewayid", g);
         var gr = {};
         gr[node.callsign] = node.uuid;
-        globalContext.set("_takgatewaycs",gr);
-        globalContext.set("_takdphost",node.host);
+        globalContext.set("_takgatewaycs", gr);
+        globalContext.set("_takdphost", node.host);
 
         if (node.role !== "Gateway") { node.ntype = "a-f-G-U-C" }
 
@@ -44,13 +44,13 @@ module.exports = function(RED) {
             delete node.repeat;
         }
 
-        var convertWMtoKMLColour = function(colour,opacity) {
+        var convertWMtoKMLColour = function (colour, opacity) {
             if (opacity == undefined) { opacity = 100; }
             var alfa = parseInt(opacity * 255 / 100).toString(16);
             return alfa + colour;
         };
 
-        var convertWMtoCOTColour = function(colour,opacity) {
+        var convertWMtoCOTColour = function (colour, opacity) {
             var c;
             if (opacity != undefined) {
                 c = Buffer.from(parseInt(opacity * 255 / 100).toString(16) + colour, "hex");
@@ -61,7 +61,7 @@ module.exports = function(RED) {
             return c.readInt32BE()
         };
 
-        var findCentroidOfPoints = function(points) {
+        var findCentroidOfPoints = function (points) {
             if (points.length < 4) { // pad if necessary (needs 4 points minimum)
                 points.push(points[2]);
                 points.unshift(points[0]);
@@ -71,7 +71,7 @@ module.exports = function(RED) {
             return centroid;
         };
 
-        var sendIt = function() {
+        var sendIt = function () {
             node.emit("input", {
                 time: new Date().toISOString(),
                 etime: new Date(Date.now() + (2 * node.repeat)).toISOString(),
@@ -97,25 +97,41 @@ module.exports = function(RED) {
         node.repeaterSetup();
         setTimeout(sendIt, 2500);
 
-        node.on("input",function(msg) {
+        node.on("input", function (msg) {
             if (msg.heartbeat) {  // Register gateway and do the heartbeats
-                var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/><track course="0.00000000" speed="0.00000000"/></detail></event>`;
-                node.send({payload:template, topic:msg.type});
-                node.status({fill:"green", shape:"dot", text:node.repeat/1000+"s - "+node.callsign});
+                var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/><track course="9999999.0" speed="0"/></detail></event>`;
+                node.send({ payload: template, topic: "TAKreg" });
+                node.status({ fill: "green", shape: "dot", text: node.repeat / 1000 + "s - " + node.callsign });
                 return;
+            }
+            // if it's just a simple filename and payload then make it look like an attachment etc...
+            if (msg.hasOwnProperty("filename") && Buffer.isBuffer(msg.payload) && !msg.hasOwnProperty("attachments")) {
+                msg.attachments = [{
+                    filename: msg.filename.split('/').pop(),
+                    content: msg.payload
+                }]
+                if (!msg.hasOwnProperty("topic")) { msg.topic = "File - " + msg.filename.split('/').pop(); }
+                delete msg.filename;
+                delete msg.payload;
             }
             // If there are attachments handle them first. (Datapackage)
             if (msg.hasOwnProperty("attachments") && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
-                if (!msg.sendTo) { node.error("Missing 'sendTo' user TAK callsign property.",msg); return; }
-                var UUID = uuid.v5(msg.topic,'d5d4a57d-48fb-58b6-93b8-d9fde658481a');
+                if (!msg.sendTo) { node.error("Missing 'sendTo' user TAK callsign property.", msg); return; }
+                var UUID = uuid.v5(msg.topic, 'd5d4a57d-48fb-58b6-93b8-d9fde658481a');
                 var fnam = msg.topic;
-                var fname = msg.topic+'.zip';
+                var fname = msg.topic + '.zip';
+                var da = new Date();
+                var dn = da.toISOString().split('-')[2].split('.')[0];
+                var calls = msg.from || node.callsign;
+                calls = calls + '.' + dn.split('T')[0] + '.' + dn.split('T')[1].split(':').join('');
                 var mf = `<MissionPackageManifest version="2"><Configuration>
                 <Parameter name="uid" value="${UUID}"/>
                 <Parameter name="name" value="${msg.topic}"/>
-                </Configuration><Contents>`;
+                <Parameter name="onReceiveImport" value="true"/>
+                <Parameter name="callsign" value="${calls}"/>
+                </Configuration><Contents>\n`;
                 var zip = new AdmZip();
-                for (var i=0; i < msg.attachments.length; i++) {
+                for (var i = 0; i < msg.attachments.length; i++) {
                     var data;
                     if (Buffer.isBuffer(msg.attachments[i].content)) {
                         data = msg.attachments[i].content;
@@ -129,13 +145,36 @@ module.exports = function(RED) {
                     var hash = crypto.createHash('md5').update(data).digest('hex');
                     var fhash = hash + '/' + msg.attachments[i].filename;
                     zip.addFile(fhash, data, "Added by Node-RED");
-                    mf +=`<Content ignore="false" zipEntry="${fhash}" />`;
+                    mf += `<Content ignore="false" zipEntry="${fhash}"><Parameter name="uid" value="${UUID}"/></Content>\n`;
                 }
-                mf +=`</Contents></MissionPackageManifest>`;
+
+                if (msg.hasOwnProperty("lat") && msg.hasOwnProperty("lon")) {
+                    var timeo = new Date(Date.now() + (1000*60*60*4)).toISOString(); // stale time to 4 hours
+                    var cott = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+                    <event version="2.0" uid="${UUID}" type="b-i-x-i" time="${da.toISOString()}" start="${da.toISOString()}" stale="${timeo}" how="h-g-i-g-o">
+                        <point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt || "9999999.0"}" ce="9999999.0" le="9999999.0" />
+                        <detail>
+                            <status readiness="true" />
+                            <contact callsign="${calls}" />
+                            <remarks>${msg.remarks || ''}</remarks>
+                            <color argb="-1" />
+                            <link uid="${node.uuid}" production_time="${da.toISOString()}" type="a-f-G-U-C" parent_callsign="${msg.from || node.callsign}" relation="p-p" />
+                            <archive />
+                        </detail>
+                    </event>`
+
+                    cott = cott.replace(/>\s+</g, "><");
+                    var hsh = crypto.createHash('md5').update(cott).digest('hex');
+                    zip.addFile(hsh+'/'+hsh+'.cot', cott, "Added by Node-RED");
+
+                    mf += `<Content ignore="false" zipEntry="${hsh+'/'+hsh+'.cot'}"><Parameter name="uid" value="${UUID}"/></Content>\n`;
+                }
+
+                mf += `</Contents></MissionPackageManifest>`;
                 mf = mf.replace(/>\s+</g, "><");
-                zip.addFile('MANIFEST/manifest.xml', Buffer.from(mf,'utf8'), msg.topic);
+                zip.addFile('MANIFEST/manifest.xml', Buffer.from(mf, 'utf8'), msg.topic);
                 var zipbuff = zip.toBuffer();
-                //zip.writeZip("/tmp/takfile")
+                zip.writeZip("/tmp/takfile.zip")
 
                 msg = {
                     from: node.callsign || msg.from || "Anonymous",
@@ -145,14 +184,14 @@ module.exports = function(RED) {
                     assetfile: fname,
                     len: zipbuff.length,
                     uid: node.uuid,
-                    hash:  crypto.createHash('sha256').update(zipbuff).digest('hex')
+                    hash: crypto.createHash('sha256').update(zipbuff).digest('hex')
                 }
 
                 let formData = new FormData();
-                const opts = { filename:fname, contentType:'application/x-zip-compressed' };
+                const opts = { filename: fname, contentType: 'application/x-zip-compressed' };
                 formData.append('assetfile', zipbuff, opts);
 
-                const url = encodeURI(node.host+'/Marti/sync/missionupload?hash='+msg.hash+'&filename='+fname+'&creatorUid='+node.uuid);
+                const url = encodeURI(node.host + '/Marti/sync/missionupload?hash=' + msg.hash + '&filename=' + fname + '&creatorUid=' + node.uuid);
                 axios({
                     method: 'post',
                     url: url,
@@ -160,7 +199,7 @@ module.exports = function(RED) {
                     data: formData
                 })
                     .then(function (response) {
-                        const urlp = encodeURI(node.host+'/Marti/api/sync/metadata/'+msg.hash+'/tool');
+                        const urlp = encodeURI(node.host + '/Marti/api/sync/metadata/' + msg.hash + '/tool');
                         var priv = (msg.sendTo === "public") ? "public" : "private";
                         axios({
                             method: 'put',
@@ -173,31 +212,31 @@ module.exports = function(RED) {
                                     const stale = new Date(new Date().getTime() + (10000)).toISOString();
 
                                     var m = `<event version="2.0" uid="${uuidv4()}" type="b-f-t-r" how="h-e" time="${start}" start="${start}" stale="${stale}">
-                                        <point lat="${msg.lat}" lon="${msg.lon}" hae="9999999.0" ce="9999999.0" le="9999999.0" />
+                                        <point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt || 9999999.0}" ce="9999999.0" le="9999999.0" />
                                         <detail>
                                         <fileshare filename="${fname}" senderUrl="${node.host}/Marti/sync/content?hash=${msg.hash}" sizeInBytes="${msg.len}" sha256="${msg.hash}" senderUid="${msg.uid}" senderCallsign="${msg.from}" name="${fnam}" />`
                                     if (msg.sendTo !== "broadcast") {
                                         var t = msg.sendTo;
-                                        if (!Array.isArray(t)) { t = [ t ]; }
-                                        m += '<marti>' + t.map(v => '<dest callsign="' + v +'"/>') + '</marti>';
+                                        if (!Array.isArray(t)) { t = [t]; }
+                                        m += '<marti>' + t.map(v => '<dest callsign="' + v + '"/>') + '</marti>';
                                     }
                                     m += '</detail></event>';
-                                    node.log( "DP: " + node.host + "/Marti/sync/content?hash=" + msg.hash );
+                                    node.log("DP: " + node.host + "/Marti/sync/content?hash=" + msg.hash);
                                     msg.payload = m.replace(/>\s+</g, "><");
                                     msg.topic = "b-f-t-r";
                                     node.send(msg);
                                 }
                             })
                             .catch(function (error) {
-                                node.error(error.message,error);
+                                node.error(error.message, error);
                             })
                     })
                     .catch(function (error) {
-                        node.error(error.message,error);
+                        node.error(error.message, error);
                     })
             }
             // Otherwise if it's a string maybe it's raw cot xml - or NMEA from GPS - or maybe a simple chat message
-            else if (typeof msg.payload === "string" ) {
+            else if (typeof msg.payload === "string") {
                 if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) { // Assume it's proper XML event so pass straight through
                     msg.topic = msg.payload.split('type="')[1].split('"')[0];
                     node.send(msg);
@@ -206,9 +245,9 @@ module.exports = function(RED) {
                     // console.log("It's NMEA",msg.payload);
                     var nm = msg.payload.trim().split(',');
                     if (nm[0] === '$GPGGA' && nm[6] > 0) {
-                        const la = parseInt(nm[2].substr(0,2)) + parseFloat(nm[2].substr(2))/60;
+                        const la = parseInt(nm[2].substr(0, 2)) + parseFloat(nm[2].substr(2)) / 60;
                         node.lat = ((nm[3] === "N") ? la : -la).toFixed(6);
-                        const lo = parseInt(nm[4].substr(0,3)) + parseFloat(nm[4].substr(3))/60;
+                        const lo = parseInt(nm[4].substr(0, 3)) + parseFloat(nm[4].substr(3)) / 60;
                         node.lon = ((nm[5] === "E") ? lo : -lo).toFixed(6);
                         node.alt = nm[9];
                     }
@@ -223,14 +262,14 @@ module.exports = function(RED) {
                     var type = "a-f-G-I-B";
                     var par = '';
 
-                    for (var t=0; t < msg.sendTo.length; t++) {
+                    for (var t = 0; t < msg.sendTo.length; t++) {
                         var m = RED.util.cloneMessage(msg);
                         const to = m.sendTo[t];
                         m.sendTo = to;
                         const toid = globalContext.get("_takgatewaycs")[m.sendTo] || m.sendTo;
                         var ma = `<marti><dest callsign="${m.sendTo}"/></marti>`;
                         if (m.sendTo === "broadcast") { m.sendTo = "All Chat Rooms"; }
-                        if (m.sendTo === "All Chat Rooms") {  ma = ""; }
+                        if (m.sendTo === "All Chat Rooms") { ma = ""; }
                         if (teamList.includes(m.sendTo)) { par = 'parent="TeamGroups"'; }
 
                         var xm = `<event version="2.0" uid="GeoChat.${node.uuid}.${toid}.${mid}" type="b-t-f" time="${start}" start="${start}" stale="${stale}" how="h-g-i-g-o">
@@ -259,7 +298,7 @@ module.exports = function(RED) {
                 if (msg.payload.hasOwnProperty("alt")) { node.alt = parseInt(msg.payload.alt); }
             }
             // Handle a generic worldmap style object
-            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("name") ) {
+            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("name")) {
                 var shapeXML = ``;
                 var d = new Date();
                 var st = d.toISOString();
@@ -278,19 +317,19 @@ module.exports = function(RED) {
                     if (!msg.payload.cottype && msg.payload.SIDC) {
                         var s = msg.payload.SIDC.split('-')[0].toLowerCase();
                         if (s.startsWith('s')) {
-                            type = s.split('').join('-').replace('s-','a-').replace('-p-','-');
+                            type = s.split('').join('-').replace('s-', 'a-').replace('-p-', '-');
                         }
                     }
                     if (msg.payload.icon === 'fa-circle fa-fw') {
                         type = 'b-m-p-s-m';
                         shapeXML = '<color argb="' + convertWMtoCOTColour(msg.payload.iconColor.replace('#', '')) + '"/>';
-                        shapeXML = shapeXML+'<usericon iconsetpath="COT_MAPPING_SPOTMAP/b-m-p-s-m/-16711681"/>';
+                        shapeXML = shapeXML + '<usericon iconsetpath="COT_MAPPING_SPOTMAP/b-m-p-s-m/-16711681"/>';
                     }
                 }
 
                 // Handle Worldmap drawing shapes
                 if (msg.payload.hasOwnProperty("action") && msg.payload.action === "draw") {
-                    ttl = 24*60*60*1000;  /// set TTL to 1 day for shapes...
+                    ttl = 24 * 60 * 60 * 1000;  /// set TTL to 1 day for shapes...
 
                     var shape = {
                         "strokeColor": (msg.payload.options.color || "910000").replace('#', ''),
@@ -364,7 +403,7 @@ module.exports = function(RED) {
                             <width>${shape.weight || 2.0}</width>
                         </LineStyle>
                         <PolyStyle>
-                            <color>${convertWMtoKMLColour(shape.fillColor,shape.fillOpacity)}</color>
+                            <color>${convertWMtoKMLColour(shape.fillColor, shape.fillOpacity)}</color>
                         </PolyStyle>
                         </Style>
                         </link>
@@ -391,7 +430,7 @@ module.exports = function(RED) {
                         }
 
                         if (shape.type === 'poly') {
-                            shapeXML += `<fillColor value="${convertWMtoCOTColour(shape.fillColor,shape.fillOpacity)}"/>`;
+                            shapeXML += `<fillColor value="${convertWMtoCOTColour(shape.fillColor, shape.fillOpacity)}"/>`;
                             type = "u-d-f";
                             if (shape.points.length === 4) {
                                 type = "u-d-r";
@@ -409,7 +448,7 @@ module.exports = function(RED) {
                         <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>
                         <track course="${msg.payload.bearing || 9999999.0}" speed="${parseInt(msg.payload.speed) || 0}"/>
                         <contact callsign="${msg.payload.name}"/>
-                        <remarks source="NRedTAK">${tag}</remarks>
+                        <remarks source="${node.callsign}">${tag}</remarks>
                         ${shapeXML}
                     </detail>
                 </event>`
@@ -420,19 +459,19 @@ module.exports = function(RED) {
 
             // Maybe a simple event json update (eg from an ingest - tweak and send back)
             // Note this is not 100% reverse of the ingest... but seems to work mostly...
-            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("event") ) {
+            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("event")) {
                 const ev = msg.payload.event;
                 msg.topic = ev.type;
                 msg.payload = `<event version="${ev.version}" uid="${ev.uid}" type="${ev.type}" time="${ev.time}" start="${ev.start}" stale="${ev.stale}" how="${ev.how}">
                     <point lat="${ev.point.lat || 0}" lon="${ev.point.lon || 0}" hae="${ev.detail?.height?.value || ev.point.hae || 9999999.0}" le="${ev.point.le}" ce="${ev.point.ce}"/>
                     <detail>
                     <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>`
-                    if (ev.detail?.track) {
-                        msg.payload += `<track speed="${ev.detail.track.speed}" course="${ev.detail.track.course}"/>`;
-                    }
-                    if (ev.detail?.color) {
-                        msg.payload += `<color argb="${ev.detail.color.argb}"/>`;
-                    }
+                if (ev.detail?.track) {
+                    msg.payload += `<track speed="${ev.detail.track.speed}" course="${ev.detail.track.course}"/>`;
+                }
+                if (ev.detail?.color) {
+                    msg.payload += `<color argb="${ev.detail.color.argb}"/>`;
+                }
                 msg.payload += `<contact callsign="${ev.detail?.contact?.callsign}"/>
                     <remarks source="${node.callsign}">${msg.remarks || ev.detail?.remarks}</remarks>
                     </detail>
@@ -443,7 +482,7 @@ module.exports = function(RED) {
 
             // Drop anything we don't handle yet.
             else {
-                node.log("Dropped: "+JSON.stringify(msg.payload));
+                node.log("Dropped: " + JSON.stringify(msg.payload));
             }
         });
 

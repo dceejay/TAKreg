@@ -52,6 +52,11 @@ requires a `msg` containing the following properties
  - **sendTo** - *string | array* - can either be an individual TAK callsign, an array of callsigns, or **broadcast** to send to all users, or **public** to just upload the package to the TAK server.
  - **topic** - *string* - the overall package name - IE what you want it to be called on the TAK device (keep it short).
  - **attachments** - *array of objects* - each object must contain at least a **filename** (string) and **content** a buffer of the file/data, for example `[{filename:"foo.kml", content: <buffer of the file>}]`
+ - **from** - *string* - (optional) callsign of the person sending the file - defaults to the gateway node callsign.
+ - **lat** - *number | (string)* - (optional) latitude of the marker for the file.
+ - **lon** - *number | (string)* - (optional) longitude of the marker for the file.
+
+If you just need to send a single file then instead of msg.attachments you can use `msg.filename` to set the filename, and the `msg.payload` should be a binary buffer.
 
 ### Sending drawing layer...
 
