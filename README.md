@@ -82,5 +82,7 @@ It will produce a well formatted JSON object containing the event. It is returne
 
 **msg.topic** is set to the COT type.
 
+If an event arrives with a *fileshare* link, it will fetch the file and add **msg.filename** and **msg.datapackage** to the output msg. The datapackage will be a buffer.
+
 It can also accept input from a UDP node configured to listen to *multicast* on group 239.2.3.1 port 6969. The JSON object produced contains similar information but formatted/organised slightly differently. (Very annoying).
 It is returned as **msg.payload.cotEvent**

@@ -37,4 +37,7 @@
         <code>_takgatewaycs</code> and <code>_takgatewayId</code> that can be used
         as look ups for other messages.</p>
     <p>It also sets <code>msg.topic</code> to the event type to make switching easier.</p>
+    <p>If an event arrives with a <i>fileshare</i> link, it will fetch the file and add
+        <code>msg.filename</code> and <code>msg.datapackage</code> to the output msg.
+        The datapackage will be a buffer.</p>
 </script>

@@ -1,4 +1,5 @@
 const { XMLParser, XMLBuilder, XMLValidator} = require("fast-xml-parser");
+const axios = require('axios').default;
 var Long = require('long').Long;
 var protobuf = require('protobufjs');
 var path = require('path');
@@ -86,7 +87,26 @@ module.exports = function(RED) {
                 global.set("_takgatewayid", b);
             }
             if (msg.payload?.event?.type) { msg.topic = msg.payload?.event?.type; }
-            node.send(msg);
+            if (msg.payload?.event?.detail?.fileshare) {
+                msg.filename = msg.payload.event.detail.fileshare.filename;
+                axios({
+                    method: 'get',
+                    url: msg.payload.event.detail.fileshare.senderUrl,
+                    headers: { 'Accept': 'application/zip' },
+                    responseType: 'arraybuffer'
+                    })
+                    .then(function (response) {
+                        msg.datapackage = Buffer.from(response.data);
+                        node.send(msg);
+                    })
+                    .catch(function (error) {
+                        node.error(error.message, error);
+                        node.send(msg);
+                    })
+            }
+            else {
+                node.send(msg);
+            }
         });
 
         node.on("close", function() {

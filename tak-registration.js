@@ -104,7 +104,7 @@ module.exports = function (RED) {
                 node.status({ fill: "green", shape: "dot", text: node.repeat / 1000 + "s - " + node.callsign });
                 return;
             }
-            // if it's just a simple filename and payload then make it look like an attachment etc...
+            // if it's just a simple filename and buffer payload then make it look like an attachment etc...
             if (msg.hasOwnProperty("filename") && Buffer.isBuffer(msg.payload) && !msg.hasOwnProperty("attachments")) {
                 msg.attachments = [{
                     filename: msg.filename.split('/').pop(),
@@ -166,7 +166,6 @@ module.exports = function (RED) {
                     cott = cott.replace(/>\s+</g, "><");
                     var hsh = crypto.createHash('md5').update(cott).digest('hex');
                     zip.addFile(hsh+'/'+hsh+'.cot', cott, "Added by Node-RED");
-
                     mf += `<Content ignore="false" zipEntry="${hsh+'/'+hsh+'.cot'}"><Parameter name="uid" value="${UUID}"/></Content>\n`;
                 }
 
@@ -177,10 +176,10 @@ module.exports = function (RED) {
                 zip.writeZip("/tmp/takfile.zip")
 
                 msg = {
-                    from: node.callsign || msg.from || "Anonymous",
+                    from: msg.from || node.callsign || "Anonymous",
                     sendTo: msg.sendTo,
-                    lat: node.lat || msg.lat || 0,
-                    lon: node.lon || msg.lon || 0,
+                    lat: msg.lat || node.lat || 0,
+                    lon: msg.lon || node.lon || 0,
                     assetfile: fname,
                     len: zipbuff.length,
                     uid: node.uuid,
