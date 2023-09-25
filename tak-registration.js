@@ -118,8 +118,8 @@ module.exports = function (RED) {
             if (msg.hasOwnProperty("attachments") && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
                 if (!msg.sendTo) { node.error("Missing 'sendTo' user TAK callsign property.", msg); return; }
                 var UUID = uuid.v5(msg.topic, 'd5d4a57d-48fb-58b6-93b8-d9fde658481a');
-                var fnam = msg.topic;
-                var fname = msg.topic + '.zip';
+                var fnam = msg.topic || msg.attachments[0].filename.split('.')[0];
+                var fname = fnam + '.zip';
                 var da = new Date();
                 var dn = da.toISOString().split('-')[2].split('.')[0];
                 var calls = msg.from || node.callsign;
@@ -173,7 +173,6 @@ module.exports = function (RED) {
                 mf = mf.replace(/>\s+</g, "><");
                 zip.addFile('MANIFEST/manifest.xml', Buffer.from(mf, 'utf8'), msg.topic);
                 var zipbuff = zip.toBuffer();
-                zip.writeZip("/tmp/takfile.zip")
 
                 msg = {
                     from: msg.from || node.callsign || "Anonymous",
