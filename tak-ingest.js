@@ -87,6 +87,10 @@ module.exports = function(RED) {
                 return;
             }
             msg.payload = msg.payload.trim();
+            var p = msg.payload.indexOf("<event");
+            if (p >= 0) {
+                msg.payload = msg.payload.substr(p);
+            }
             if (msg.payload.indexOf("<event") !== 0) {
                 if (msg.payload.trim().length > 0 && msg.payload !== '</event>') { // ignore blank lines
                     node.error("Input is not an XML event string.",msg);
