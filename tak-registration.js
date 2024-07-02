@@ -298,6 +298,7 @@ module.exports = function (RED) {
             // Handle a generic worldmap style object
             else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("name")) {
                 var shapeXML = ``;
+                var linkXML = ``;
                 var d = new Date();
                 var st = d.toISOString();
                 var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
@@ -323,6 +324,11 @@ module.exports = function (RED) {
                         shapeXML = '<color argb="' + convertWMtoCOTColour(msg.payload.iconColor.replace('#', '')) + '"/>';
                         shapeXML = shapeXML + '<usericon iconsetpath="COT_MAPPING_SPOTMAP/b-m-p-s-m/-16711681"/>';
                     }
+                }
+
+                // for markers that aren't us, then need to add a link tag
+                if (msg.payload.hasOwnProperty("name")) {
+                    linkXML = `<link uid="${node.uuid}" production_time="${st}" type="${node.ntype}" parent_callsign="${node.callsign}" relation="p-p"/>`;
                 }
 
                 // Handle Worldmap drawing shapes
@@ -444,8 +450,9 @@ module.exports = function (RED) {
                     <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999.0" ce="9999999.0"/>
                     <detail>
                         <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>
-                        <track course="${msg.payload.bearing || 9999999.0}" speed="${parseInt(msg.payload.speed) || 0}"/>
+                        <track course="${msg.payload.bearing || 9999999.0}" speed="${parseInt(msg.payload.speed) || 0}"/>}
                         <contact callsign="${msg.payload.name}"/>
+                        ${linkXML}
                         <remarks source="${node.callsign}">${tag}</remarks>
                         ${shapeXML}
                     </detail>

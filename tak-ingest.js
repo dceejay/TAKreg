@@ -86,7 +86,7 @@ module.exports = function(RED) {
                 node.error("Input is not a string.",msg);
                 return;
             }
-            msg.payload = msg.payload.trim();
+            msg.payload = msg.payload.trim().replace(/>\s+</g, "><");
             var p = msg.payload.indexOf("<event");
             if (p >= 0) {
                 msg.payload = msg.payload.substr(p);
