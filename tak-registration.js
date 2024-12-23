@@ -1,6 +1,3 @@
-const { methodToString } = require('adm-zip/util');
-const { isArray } = require('util');
-
 module.exports = function (RED) {
     "use strict";
     const os = require('os');
@@ -257,7 +254,7 @@ module.exports = function (RED) {
                     const start = new Date().toISOString();
                     const stale = new Date(new Date().getTime() + (10000)).toISOString();
                     const mid = uuidv4();
-                    var type = "a-f-G-I-B";
+                    const type = "a-f-G-I-B";
                     var par = '';
 
                     for (var t = 0; t < msg.sendTo.length; t++) {
