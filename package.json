@@ -5,7 +5,7 @@
     "dependencies": {
         "@turf/turf": "7.2.0",
         "adm-zip": "0.5.16",
-        "axios": "1.7.9",
+        "axios": "1.8.2",
         "fast-xml-parser": "4.5.1",
         "form-data": "4.0.1",
         "long": "5.2.4",
