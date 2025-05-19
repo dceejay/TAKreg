@@ -290,12 +290,14 @@ module.exports = function (RED) {
             else if (typeof msg.payload === "object" && !msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
                 node.lat = msg.payload.lat;
                 node.lon = msg.payload.lon;
+                if (msg.payload.hasOwnProperty("altft")) { node.alt = parseInt(msg.payload.alt * 0.3048); }
                 if (msg.payload.hasOwnProperty("alt")) { node.alt = parseInt(msg.payload.alt); }
             }
             // Handle a generic worldmap style object
             else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("name")) {
                 var shapeXML = ``;
                 var linkXML = ``;
+                var userIcon = ``;
                 var d = new Date();
                 var st = d.toISOString();
                 var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
@@ -303,6 +305,7 @@ module.exports = function (RED) {
                 if (msg.payload.tag) { tag += " " + msg.payload.tag }
                 if (msg.payload.layer) { tag += " #" + msg.payload.layer }
                 else { tag += " #Worldmap"; }
+                if (!msg.payload?.alt && msg.payload?.altft) { msg.payload.alt = msg.payload.altft * 0.3048}
 
                 // Handle simple markers
                 if (msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
@@ -316,10 +319,15 @@ module.exports = function (RED) {
                             type = s.split('').join('-').replace('s-', 'a-').replace('-p-', '-');
                         }
                     }
-                    if (msg.payload.icon === 'fa-circle fa-fw') {
-                        type = 'b-m-p-s-m';
-                        shapeXML = '<color argb="' + convertWMtoCOTColour(msg.payload.iconColor.replace('#', '')) + '"/>';
-                        shapeXML = shapeXML + '<usericon iconsetpath="COT_MAPPING_SPOTMAP/b-m-p-s-m/-16711681"/>';
+                    if (msg.payload.hasOwnProperty("icon")) {
+                        if (msg.payload.icon === 'fa-circle fa-fw') {
+                            type = 'b-m-p-s-m';
+                            shapeXML = '<color argb="' + convertWMtoCOTColour(msg.payload.iconColor.replace('#', '')) + '"/>';
+                            shapeXML = shapeXML + '<usericon iconsetpath="COT_MAPPING_SPOTMAP/b-m-p-s-m/-16711681"/>';
+                        }
+                        else {
+                            userIcon = `<usericon iconsetpath="${msg.payload.icon}"/>`;
+                        }
                     }
                 }
 
@@ -443,14 +451,15 @@ module.exports = function (RED) {
                 var et = Date.now() + ttl;
                 et = (new Date(et)).toISOString();
 
-                msg.payload = `<event version="2.0" uid="${msg.payload.name}" type="${type}" time="${st}" start="${st}" stale="${et}" how="h-e">
+                msg.payload = `<event version="2.0" uid="NRC-${msg.payload.name}" type="${type}" time="${st}" start="${st}" stale="${et}" how="h-e">
                     <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999.0" ce="9999999.0"/>
                     <detail>
-                        <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>
-                        <track course="${msg.payload.bearing || 9999999.0}" speed="${parseInt(msg.payload.speed) || 0}"/>}
+                        <takv device="${os.hostname()}" os="${os.platform()}" platform="NodeRedTAK" version="${ver}"/>
+                        <track course="${msg.payload.bearing || 9999999.0}" speed="${parseInt(msg.payload.speed) || 0}"/>
                         <contact callsign="${msg.payload.name}"/>
                         ${linkXML}
                         <remarks source="${node.callsign}">${tag}</remarks>
+                        ${userIcon}
                         ${shapeXML}
                     </detail>
                 </event>`
