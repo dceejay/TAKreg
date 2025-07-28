@@ -314,10 +314,12 @@ module.exports = function (RED) {
                         msg.payload.SIDC = ais2sidc(msg.payload.aistype);
                     }
                     if (!msg.payload.cottype && msg.payload.SIDC) {
-                        var s = msg.payload.SIDC.split('-')[0].toLowerCase();
-                        if (s.startsWith('s')) {
-                            type = s.split('').join('-').replace('s-', 'a-').replace('-p-', '-');
-                        }
+                        var s = msg.payload.SIDC.split('-')[0].toUpperCase();
+                        var t = s.substr(2,1);
+                        var r = s.substr(4);
+                        s = s.substr(1,1).toLowerCase();
+                        type = 'a-' + s + '-' + t + '-' + r.split('').join('-');
+                        userIcon = '<__milsym id="'+msg.payload.SIDC+'"/>';
                     }
                     if (msg.payload.hasOwnProperty("icon")) {
                         if (msg.payload.icon === 'fa-circle fa-fw') {
