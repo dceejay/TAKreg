@@ -287,23 +287,23 @@ module.exports = function (RED) {
                 }
             }
             // Just has lat, lon (and alt) but no name - assume it's our local position we're updating
-            else if (typeof msg.payload === "object" && !msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
+            else if (msg?.payload && typeof msg.payload === "object" && !msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
                 node.lat = msg.payload.lat;
                 node.lon = msg.payload.lon;
                 if (msg.payload.hasOwnProperty("altft")) { node.alt = parseInt(msg.payload.alt * 0.3048); }
                 if (msg.payload.hasOwnProperty("alt")) { node.alt = parseInt(msg.payload.alt); }
             }
             // Handle a generic worldmap style object
-            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("name")) {
+            else if (msg?.payload && typeof msg.payload === "object" && msg.payload.hasOwnProperty("name")) {
                 var shapeXML = ``;
                 var linkXML = ``;
                 var userIcon = ``;
                 var d = new Date();
                 var st = d.toISOString();
-                var ttl = ((msg.payload?.ttl || 0) * 1000) || 60000;
-                var tag = msg.payload?.remarks || "";
-                if (msg.payload?.tag) { tag += " " + msg.payload.tag }
-                if (msg.payload?.layer) { tag += " #" + msg.payload.layer }
+                var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
+                var tag = msg.payload.remarks || "";
+                if (msg.payload.tag) { tag += " " + msg.payload.tag }
+                if (msg.payload.layer) { tag += " #" + msg.payload.layer }
                 else { tag += " #Worldmap"; }
                 if (!msg.payload?.alt && msg.payload?.altft) { msg.payload.alt = msg.payload.altft * 0.3048}
 
