@@ -95,7 +95,7 @@ module.exports = function (RED) {
         setTimeout(sendIt, 2500);
 
         node.on("input", function (msg) {
-            if (msg.heartbeat) {  // Register gateway and do the heartbeats
+            if (msg?.heartbeat) {  // Register gateway and do the heartbeats
                 var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/><track course="9999999.0" speed="0"/></detail></event>`;
                 node.send({ payload: template, topic: "TAKreg" });
                 node.status({ fill: "green", shape: "dot", text: node.repeat / 1000 + "s - " + node.callsign });
@@ -231,7 +231,7 @@ module.exports = function (RED) {
                     })
             }
             // Otherwise if it's a string maybe it's raw cot xml - or NMEA from GPS - or maybe a simple chat message
-            else if (typeof msg.payload === "string") {
+            else if (msg?.payload && typeof msg.payload === "string") {
                 if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) { // Assume it's proper XML event so pass straight through
                     msg.topic = msg.payload.split('type="')[1].split('"')[0];
                     node.send(msg);
@@ -472,7 +472,7 @@ module.exports = function (RED) {
 
             // Maybe a simple event json update (eg from an ingest - tweak and send back)
             // Note this is not 100% reverse of the ingest... but seems to work mostly...
-            else if (typeof msg.payload === "object" && msg.payload.hasOwnProperty("event")) {
+            else if (msg?.payload && typeof msg.payload === "object" && msg.payload.hasOwnProperty("event")) {
                 const ev = msg.payload.event;
                 msg.topic = ev.type;
                 msg.payload = `<event version="${ev.version}" uid="${ev.uid}" type="${ev.type}" time="${ev.time}" start="${ev.start}" stale="${ev.stale}" how="${ev.how}">
@@ -495,7 +495,7 @@ module.exports = function (RED) {
 
             // Drop anything we don't handle yet.
             else {
-                node.log("Dropped: " + JSON.stringify(msg.payload));
+                node.log("Dropped: " + JSON.stringify(msg?.payload || "msg"));
             }
         });
 
