@@ -300,10 +300,10 @@ module.exports = function (RED) {
                 var userIcon = ``;
                 var d = new Date();
                 var st = d.toISOString();
-                var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
-                var tag = msg.payload.remarks || "";
-                if (msg.payload.tag) { tag += " " + msg.payload.tag }
-                if (msg.payload.layer) { tag += " #" + msg.payload.layer }
+                var ttl = ((msg.payload?.ttl || 0) * 1000) || 60000;
+                var tag = msg.payload?.remarks || "";
+                if (msg.payload?.tag) { tag += " " + msg.payload.tag }
+                if (msg.payload?.layer) { tag += " #" + msg.payload.layer }
                 else { tag += " #Worldmap"; }
                 if (!msg.payload?.alt && msg.payload?.altft) { msg.payload.alt = msg.payload.altft * 0.3048}
 
