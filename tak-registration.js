@@ -112,7 +112,7 @@ module.exports = function (RED) {
                 delete msg.payload;
             }
             // If there are attachments handle them first. (Datapackage)
-            if (msg.hasOwnProperty("attachments") && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
+            if (msg?.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
                 if (!msg.sendTo) { node.error("Missing 'sendTo' user TAK callsign property.", msg); return; }
                 var UUID = uuid.v5(msg.topic, 'd5d4a57d-48fb-58b6-93b8-d9fde658481a');
                 var fnam = msg.topic || msg.attachments[0].filename.split('.')[0];
