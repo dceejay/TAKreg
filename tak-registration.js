@@ -102,7 +102,7 @@ module.exports = function (RED) {
                 return;
             }
             // if it's just a simple filename and buffer payload then make it look like an attachment etc...
-            if (msg.hasOwnProperty("filename") && Buffer.isBuffer(msg?.payload) && !msg.hasOwnProperty("attachments")) {
+            if (msg?.payload && msg.hasOwnProperty("filename") && Buffer.isBuffer(msg.payload) && !msg.hasOwnProperty("attachments")) {
                 msg.attachments = [{
                     filename: msg.filename.split('/').pop(),
                     content: msg.payload
