@@ -13,7 +13,7 @@ module.exports = function (RED) {
 
     function TakRegistrationNode(n) {
         RED.nodes.createNode(this, n);
-        const invalid = "9999999.0";
+        const invalid = "9999999";
         this.group = n.group;
         this.role = n.role || "Gateway";
         this.ntype = n.ntype || "a-f-G-I-B";
@@ -96,7 +96,7 @@ module.exports = function (RED) {
 
         node.on("input", function (msg) {
             if (msg?.heartbeat) {  // Register gateway and do the heartbeats
-                var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/><track course="9999999.0" speed="0"/></detail></event>`;
+                var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/><track course="0" speed="0"/></detail></event>`;
                 node.send({ payload: template, topic: "TAKreg" });
                 node.status({ fill: "green", shape: "dot", text: node.repeat / 1000 + "s - " + node.callsign });
                 return;
@@ -149,7 +149,7 @@ module.exports = function (RED) {
                     var timeo = new Date(Date.now() + (1000*60*60*4)).toISOString(); // stale time to 4 hours
                     var cott = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
                     <event version="2.0" uid="${UUID}" type="b-i-x-i" time="${da.toISOString()}" start="${da.toISOString()}" stale="${timeo}" how="h-g-i-g-o">
-                        <point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt || "9999999.0"}" ce="9999999.0" le="9999999.0" />
+                        <point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt || "9999999"}" ce="9999999" le="9999999" />
                         <detail>
                             <status readiness="true" />
                             <contact callsign="${calls}" />
@@ -207,7 +207,7 @@ module.exports = function (RED) {
                                     const stale = new Date(new Date().getTime() + (10000)).toISOString();
 
                                     var m = `<event version="2.0" uid="${uuidv4()}" type="b-f-t-r" how="h-e" time="${start}" start="${start}" stale="${stale}">
-                                        <point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt || 9999999.0}" ce="9999999.0" le="9999999.0" />
+                                        <point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt || 9999999}" ce="9999999" le="9999999" />
                                         <detail>
                                         <fileshare filename="${fname}" senderUrl="${node.host}/Marti/sync/content?hash=${msg.hash}" sizeInBytes="${msg.len}" sha256="${msg.hash}" senderUid="${msg.uid}" senderCallsign="${msg.from}" name="${fnam}" />`
                                     if (msg.sendTo !== "broadcast") {
@@ -268,7 +268,7 @@ module.exports = function (RED) {
                         if (teamList.includes(m.sendTo)) { par = 'parent="TeamGroups"'; }
 
                         var xm = `<event version="2.0" uid="GeoChat.${node.uuid}.${toid}.${mid}" type="b-t-f" time="${start}" start="${start}" stale="${stale}" how="h-g-i-g-o">
-        <point lat="${node.lat}" lon="${node.lon}" hae="9999999.0" ce="9999999.0" le="9999999.0"/>
+        <point lat="${node.lat}" lon="${node.lon}" hae="9999999" ce="9999999" le="9999999"/>
         <detail>
             <__chat ${par} groupOwner="false" messageId="${mid}" chatroom="${m.sendTo}" id="${toid}" senderCallsign="${node.callsign}">
                 <chatgrp uid0="${node.uuid}" uid1="${toid}" id="${toid}"/>
@@ -276,7 +276,7 @@ module.exports = function (RED) {
             <link uid="${node.uuid}" type="${type}" relation="p-p"/>
             <remarks source="BAO.F.ATAK.${node.uuid}" to="${toid}" time="${start}">${msg.payload}</remarks>
             ${ma}
-            <track speed="0.0" course="0.0"/>
+            <track speed="0" course="0"/>
         </detail>
     </event>`;
                         // console.log(xm);
@@ -319,7 +319,7 @@ module.exports = function (RED) {
                         var r = s.substr(4);
                         s = s.substr(1,1).toLowerCase();
                         type = 'a-' + s + '-' + t + '-' + r.split('').join('-');
-                        userIcon = '<__milsym id="'+msg.payload.SIDC+'"/>';
+                        // userIcon = '<__milsym id="'+msg.payload.SIDC+'"/>';
                     }
                     if (msg.payload.hasOwnProperty("icon")) {
                         if (msg.payload.icon === 'fa-circle fa-fw') {
@@ -454,10 +454,10 @@ module.exports = function (RED) {
                 et = (new Date(et)).toISOString();
 
                 msg.payload = `<event version="2.0" uid="NRC-${msg.payload.name}" type="${type}" time="${st}" start="${st}" stale="${et}" how="h-e">
-                    <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999.0" ce="9999999.0"/>
+                    <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999" ce="9999999"/>
                     <detail>
                         <takv device="${os.hostname()}" os="${os.platform()}" platform="NodeRedTAK" version="${ver}"/>
-                        <track course="${msg.payload.bearing || 9999999.0}" speed="${parseInt(msg.payload.speed) || 0}"/>
+                        <track course="${msg.payload?.bearing || msg.payload?.hdg || 0}" speed="${parseInt(msg.payload?.speed) || 0}"/>
                         <contact callsign="${msg.payload.name}"/>
                         ${linkXML}
                         <remarks source="${node.callsign}">${tag}</remarks>
@@ -476,7 +476,7 @@ module.exports = function (RED) {
                 const ev = msg.payload.event;
                 msg.topic = ev.type;
                 msg.payload = `<event version="${ev.version}" uid="${ev.uid}" type="${ev.type}" time="${ev.time}" start="${ev.start}" stale="${ev.stale}" how="${ev.how}">
-                    <point lat="${ev.point.lat || 0}" lon="${ev.point.lon || 0}" hae="${ev.detail?.height?.value || ev.point.hae || 9999999.0}" le="${ev.point.le}" ce="${ev.point.ce}"/>
+                    <point lat="${ev.point.lat || 0}" lon="${ev.point.lon || 0}" hae="${ev.detail?.height?.value || ev.point.hae || 9999999}" le="${ev.point.le}" ce="${ev.point.ce}"/>
                     <detail>
                     <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>`
                 if (ev.detail?.track) {
@@ -501,7 +501,7 @@ module.exports = function (RED) {
 
         node.on("close", function() {
             // var tim = new Date().toISOString();
-            // var template = `<?xml version="1.0" encoding="utf-8" standalone="yes"?><event version="2.0" uid="${node.uuid}" type="t-x-d-d" how="h-g-i-g-o" time="${tim}" start="${tim}" stale="${tim}"><detail><link uid="${node.uuid}" relation="p-p" type="a-f-G-I-B" /></detail><point le="9999999.0" ce="9999999.0" hae="9999999.0" lon="0" lat="0" /></event>"`;
+            // var template = `<?xml version="1.0" encoding="utf-8" standalone="yes"?><event version="2.0" uid="${node.uuid}" type="t-x-d-d" how="h-g-i-g-o" time="${tim}" start="${tim}" stale="${tim}"><detail><link uid="${node.uuid}" relation="p-p" type="a-f-G-I-B" /></detail><point le="9999999" ce="9999999" hae="9999999" lon="0" lat="0" /></event>"`;
             // node.send({payload:template});  // This never happens in time so not useful
             clearInterval(this.interval_id);
             if (RED.settings.verbose) { this.log(RED._("inject.stopped")); }
