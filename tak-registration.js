@@ -7,7 +7,8 @@ module.exports = function (RED) {
     const FormData = require('form-data')
     const { v4: uuidv4 } = require('uuid');
     const uuid = require('uuid');
-    const turf = require("@turf/turf");
+    const turfpolygon = require("@turf/helpers").polygon;
+    const turfcentroid = require("@turf/centroid");
     const ver = require('./package.json').version;
     const teamList = ["Cyan", "Red", "Green", "Blue", "Magenta", "Yellow", "Orange", "Maroon", "Purple", "Dark Blue", "Dark Green", "Teal", "Brown"];
 
@@ -63,8 +64,8 @@ module.exports = function (RED) {
                 points.push(points[2]);
                 points.unshift(points[0]);
             }
-            var poly = turf.polygon([points]);
-            var centroid = turf.centroid(poly);
+            var poly = turfpolygon([points]);
+            var centroid = turfcentroid(poly);
             return centroid;
         };
 
@@ -314,11 +315,15 @@ module.exports = function (RED) {
                         msg.payload.SIDC = ais2sidc(msg.payload.aistype);
                     }
                     if (!msg.payload.cottype && msg.payload.SIDC) {
+                        if (msg.payload.SIDC.substr(3,1) === '-') {
+                            msg.payload.SIDC = msg.payload.SIDC.replace("-", "P")
+                        }
                         var s = msg.payload.SIDC.split('-')[0].toUpperCase();
                         var t = s.substr(2,1);
                         var r = s.substr(4);
                         s = s.substr(1,1).toLowerCase();
                         type = 'a-' + s + '-' + t + '-' + r.split('').join('-');
+                        if (type.endsWith('-')) { type = type.slice(0, -1); }
                         // userIcon = '<__milsym id="'+msg.payload.SIDC+'"/>';
                     }
                     if (msg.payload.hasOwnProperty("icon")) {
