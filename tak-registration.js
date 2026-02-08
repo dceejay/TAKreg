@@ -304,14 +304,14 @@ module.exports = function (RED) {
                 var ttl = ((msg.payload.ttl || 0) * 1000) || 60000;
                 var tag = msg.payload.remarks || "";
                 if (msg.payload.tag) { tag += " " + msg.payload.tag }
-                if (msg.payload.layer) { tag += " #" + msg.payload.layer }
+                if (msg.payload.layer) { tag += " #" + msg.payload.layer.replace(/ /g,'_') }
                 else { tag += " #Worldmap"; }
                 if (!msg.payload?.alt && msg.payload?.altft) { msg.payload.alt = msg.payload.altft * 0.3048}
 
                 // Handle simple markers
                 if (msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
                     var type = msg.payload.cottype || "a-u-g-u";
-                    if (!msg.payload.cottype && !msg.payload.SIDC && msg.payload.aistype) {
+                    if (!msg.payload.cottype && !msg.payload.SIDC && msg.payload.hasOwnProperty("aistype")) {
                         msg.payload.SIDC = ais2sidc(msg.payload.aistype);
                     }
                     if (!msg.payload.cottype && msg.payload.SIDC) {
@@ -324,11 +324,18 @@ module.exports = function (RED) {
                         s = s.substr(1,1).toLowerCase();
                         type = 'a-' + s + '-' + t + '-' + r.split('').join('-');
                         if (type.endsWith('-')) { type = type.slice(0, -1); }
-                        // userIcon = '<__milsym id="'+msg.payload.SIDC+'"/>';
+                        if (msg.payload.SIDC.length < 12) { msg.payload.SIDC = (msg.payload.SIDC + '----------').substr(0, 12); }
+                        userIcon = '<__milsym id="'+msg.payload.SIDC.substr(0,12)+'***">';
+                        userIcon += '<unitmodifier code="T">' + msg.payload.name + '</unitmodifier>';
+                        if (msg.payload?.COG) { userIcon += '<unitmodifier code="Q">' + msg.payload.COG + '</unitmodifier>'; }
+                        if (msg.payload?.model) { userIcon += '<unitmodifier code="V">' + msg.payload.model + '</unitmodifier>'; }
+                        if (msg.payload?.dtg) { userIcon += '<unitmodifier code="W">' + msg.payload.dtg + '</unitmodifier>'; }
+                        userIcon += '</__milsym>';
                     }
-                    if (msg.payload.hasOwnProperty("icon")) {
+                    else if (msg.payload.hasOwnProperty("icon")) {
                         if (msg.payload.icon === 'fa-circle fa-fw') {
                             type = 'b-m-p-s-m';
+                            if (!msg.payload?.iconColor) { msg.payload.iconColor = "FFFF00"; }
                             shapeXML = '<color argb="' + convertWMtoCOTColour(msg.payload.iconColor.replace('#', '')) + '"/>';
                             shapeXML = shapeXML + '<usericon iconsetpath="COT_MAPPING_SPOTMAP/b-m-p-s-m/-16711681"/>';
                         }
@@ -458,6 +465,9 @@ module.exports = function (RED) {
                 var et = Date.now() + ttl;
                 et = (new Date(et)).toISOString();
 
+                if (msg.payload?.alt && typeof msg.payload.alt === "string" && msg.payload.alt.indexOf("ft") > -1) { msg.payload.alt = parseInt(msg.payload.alt) * 0.3048; }
+                if (msg.payload?.altft && !msg.payload.alt) { msg.payload.alt = parseInt(msg.payload.altft) * 0.3048; }
+
                 msg.payload = `<event version="2.0" uid="NRC-${msg.payload.name}" type="${type}" time="${st}" start="${st}" stale="${et}" how="h-e">
                     <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999" ce="9999999"/>
                     <detail>
@@ -514,48 +524,50 @@ module.exports = function (RED) {
     }
 
     var aisToSidc1 = {
-        4: "SFSPXA------",
-        5: "SFSPXM------",
-        6: "SFSPXMP-----",
-        7: "SFSPXMC-----",
-        8: "SFSPXMO-----",
-        9: "SFSPXM------"
+        0: "SASPX-------",
+        4: "SASPXA------",
+        5: "SASPXM------",
+        6: "SASPXMP-----",
+        7: "SASPXMC-----",
+        8: "SASPXMO-----",
+        9: "SASPXM------"
     }
 
     var aisToSidc2 = {
-        30: "SFSPXF------",
-        31: "SFSPXMTO----",
-        32: "SFSPXMTO--NS",
-        33: "SFSPXFDR----",
-        34: "SFUPND------",
-        35: "SFSP--------",
-        36: "SFSPXR------",
-        37: "SFSPXA------",
-        40: "SFSPXA------", //-
-        50: "SFSPXM------", //-
-        52: "SFSPXMTU----",
-        53: "SFSPNS------",
-        55: "SFSPXL------",
-        58: "SFSPNM------",
-        60: "SFSPXMP-----", //-
-        70: "SFSPXMC-----", //-
-        71: "SFSPXMH-----",
-        72: "SFSPXMH-----",
-        73: "SFSPXMH-----",
-        74: "SFSPXMH-----",
-        80: "SFSPXMO-----", //-
-        90: "SFSPXM------", //-
+        0: "SASPX-------",
+        30: "SASPXF------",
+        31: "SASPXMTO----",
+        32: "SASPXMTO--NS",
+        33: "SASPXFDR----",
+        34: "SAUPND------",
+        35: "SASP--------",
+        36: "SASPXR------",
+        37: "SASPXA------",
+        40: "SASPXA------",
+        50: "SASPXM------",
+        52: "SASPXMTU----",
+        53: "SASPNS------",
+        55: "SASPXL------",
+        58: "SASPNM------",
+        60: "SASPXMP-----",
+        70: "SASPXMC-----",
+        71: "SASPXMH-----",
+        72: "SASPXMH-----",
+        73: "SASPXMH-----",
+        74: "SASPXMH-----",
+        80: "SASPXMO-----",
+        90: "SASPXM------",
     }
 
     var ais2sidc = function (aisType) {
         //aisType = Number(aisType);
         if (aisType >= 100) { return "GNMPOHTH----"; }
-        aisType = aisToSidc2[aisType];
-        if (aisType && isNaN(aisType)) { return aisType; }
+        var aisType2 = aisToSidc2[aisType];
+        if (aisType2 !== undefined) { return aisType2; }
         aisType = parseInt(aisType / 10);
-        aisType = aisToSidc1[aisType];
-        if (aisType && isNaN(aisType)) { return aisType; }
-        return "SFSPXM------";
+        var aisType3 = aisToSidc1[aisType];
+        if (aisType3 !== undefined) { return aisType3; }
+        return "SASPX-------";
     }
 
     RED.nodes.registerType("tak registration", TakRegistrationNode);

@@ -36,7 +36,7 @@ If the `msg.payload` is an XML string it will be passed directly though. It shou
 
 To create or update a simple marker send a msg with the following property
 
- - **payload** - *object* - a "standard" node-red worldmap format - IE a msg.payload containing `name, lat, lon, SIDC or cottype or aistype, (alt), (speed), (bearing), (layer), (remarks)`, where `SIDC` is the standard mil 2525C code, eg SFGPU, `cottype` is the CoT type, eg a-f-g-u, or `aistype` is the AIS ship type number, eg 80 for a tanker. The `layer` will get turned into a hashtag which can then be selected on/off in the TAK app layers control, and any `remarks` will get added to the CoT remarks field. You can also set the `icon` property to specify one of the inbuilt custom icons if you know the magic iconset codes.
+ - **payload** - *object* - a "standard" node-red worldmap format - IE a msg.payload containing `name, lat, lon, SIDC or cottype or aistype, (alt), (speed), (bearing), (layer), (remarks)`, where `SIDC` is the standard mil 2525C code, eg SFGPU, `cottype` is the CoT type, eg a-f-g-u, or `aistype` is the AIS ship type number, eg 80 for a tanker. The `layer` will get turned into a hashtag which can then be selected on/off in the TAK app layers control, and any `remarks` will get added to the CoT remarks field. You can also set the `icon` property to specify one of the inbuilt custom icons if you know the magic iconset codes, or *fa-circle fa-fw* to use spot markers in which case `iconColor` will set the colour of the spot.
 
  ### Simple GeoChat messages
 
