@@ -109,7 +109,7 @@ module.exports = function(RED) {
                 b[msg.payload.event.uid] = msg.payload.event.detail.contact.callsign;
                 global.set("_takgatewayid", b);
             }
-            if (msg.payload?.event?.type) { msg.topic = msg.payload?.event?.type; }
+            if (msg.payload?.event?.type) { msg.topic = msg.payload.event.type; }
             if (msg.payload?.event?.detail?.fileshare) {
                 msg.filename = msg.payload.event.detail.fileshare.filename;
                 axios({

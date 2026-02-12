@@ -1,13 +1,13 @@
 {
     "name": "node-red-contrib-tak-registration",
-    "version": "0.16.8",
+    "version": "0.16.9",
     "description": "A Node-RED node to register to TAK and to help wrap files as datapackages to send to TAK",
     "dependencies": {
-        "@turf/helpers": "^7.3.3",
-        "@turf/centroid": "^7.3.3",
+        "@turf/helpers": "^7.3.4",
+        "@turf/centroid": "^7.3.4",
         "adm-zip": "^0.5.16",
-        "axios": "^1.13.4",
-        "fast-xml-parser": "^5.3.4",
+        "axios": "^1.13.5",
+        "fast-xml-parser": "^5.3.5",
         "form-data": "^4.0.5",
         "long": "^5.3.2",
         "protobufjs": "^8.0.0",

@@ -26,7 +26,7 @@ It can send various types of messages to TAK.
 
 It should be configured with a name, and location.
 
-As it registers to the gateway it should be possible for other team members to send messages and markers to the gateway.
+As it registers to the TAK server it should be possible for other team members to send messages and markers to the gateway.
 
 ### Standard COT event
 
