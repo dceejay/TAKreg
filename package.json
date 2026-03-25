@@ -7,7 +7,7 @@
         "@turf/centroid": "^7.3.4",
         "adm-zip": "^0.5.16",
         "axios": "^1.13.5",
-        "fast-xml-parser": "^5.3.6",
+        "fast-xml-parser": "^5.3.8",
         "form-data": "^4.0.5",
         "long": "^5.3.2",
         "protobufjs": "^8.0.0",
