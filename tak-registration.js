@@ -5,8 +5,7 @@ module.exports = function (RED) {
     const axios = require('axios').default;
     const crypto = require("crypto");
     const FormData = require('form-data')
-    const { v4: uuidv4 } = require('uuid');
-    const uuid = require('uuid');
+    const { v4: uuidv4, v5: uuidv5 } = require('uuid');
     const turfpolygon = require("@turf/helpers").polygon;
     const turfcentroid = require("@turf/centroid");
     const ver = require('./package.json').version;
@@ -14,7 +13,7 @@ module.exports = function (RED) {
 
     function TakRegistrationNode(n) {
         RED.nodes.createNode(this, n);
-        const invalid = "9999999";
+        const invalid = 9999999;
         this.group = n.group;
         this.role = n.role || "Gateway";
         this.ntype = n.ntype || "a-f-G-I-B";
@@ -43,14 +42,14 @@ module.exports = function (RED) {
         }
 
         var convertWMtoKMLColour = function (colour, opacity) {
-            if (opacity == undefined) { opacity = 100; }
+            if (opacity === undefined) { opacity = 100; }
             var alfa = parseInt(opacity * 255 / 100).toString(16);
             return alfa + colour;
         };
 
         var convertWMtoCOTColour = function (colour, opacity) {
             var c;
-            if (opacity != undefined) {
+            if (opacity !== undefined) {
                 c = Buffer.from(parseInt(opacity * 255 / 100).toString(16) + colour, "hex");
             }
             else {
@@ -60,10 +59,7 @@ module.exports = function (RED) {
         };
 
         var findCentroidOfPoints = function (points) {
-            if (points.length < 4) { // pad if necessary (needs 4 points minimum)
-                points.push(points[2]);
-                points.unshift(points[0]);
-            }
+            while (points.length < 4) { points.push(points[0]); } // pad if necessary (needs 4 points minimum)
             var poly = turfpolygon([points]);
             var centroid = turfcentroid(poly);
             return centroid;
@@ -72,7 +68,7 @@ module.exports = function (RED) {
         var sendIt = function () {
             node.emit("input", {
                 time: new Date().toISOString(),
-                etime: new Date(Date.now() + (2 * node.repeat)).toISOString(),
+                etime: new Date(Date.now() + (2 * node.repeat * 1000)).toISOString(),
                 lat: node.lat,
                 lon: node.lon,
                 alt: node.alt,
@@ -85,11 +81,11 @@ module.exports = function (RED) {
         };
 
         node.repeaterSetup = function () {
-            node.repeat = node.repeat * 1000;
+            const intervalMs = node.repeat * 1000;
             if (RED.settings.verbose) {
                 node.log(RED._("inject.repeat", node));
             }
-            node.interval_id = setInterval(sendIt, node.repeat);
+            node.interval_id = setInterval(sendIt, intervalMs);
         };
 
         node.repeaterSetup();
@@ -99,7 +95,7 @@ module.exports = function (RED) {
             if (msg?.heartbeat) {  // Register gateway and do the heartbeats
                 var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/><track course="0" speed="0"/></detail></event>`;
                 node.send({ payload: template, topic: "TAKreg" });
-                node.status({ fill: "green", shape: "dot", text: node.repeat / 1000 + "s - " + node.callsign });
+                node.status({ fill: "green", shape: "dot", text: node.repeat + "s - " + node.callsign });
                 return;
             }
             // if it's just a simple filename and buffer payload then make it look like an attachment etc...
@@ -115,7 +111,7 @@ module.exports = function (RED) {
             // If there are attachments handle them first. (Datapackage)
             if (msg?.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
                 if (!msg.sendTo) { node.error("Missing 'sendTo' user TAK callsign property.", msg); return; }
-                var UUID = uuid.v5(msg.topic, 'd5d4a57d-48fb-58b6-93b8-d9fde658481a');
+                var UUID = uuidv5(msg.topic, 'd5d4a57d-48fb-58b6-93b8-d9fde658481a');
                 var fnam = msg.topic || msg.attachments[0].filename.split('.')[0];
                 var fname = fnam + '.zip';
                 var da = new Date();
@@ -182,54 +178,59 @@ module.exports = function (RED) {
                     uid: node.uuid,
                     hash: crypto.createHash('sha256').update(zipbuff).digest('hex')
                 }
+                const al = msg.alt || node?.alt;
+                if (al) { msg.alt = parseInt(al); }
 
                 let formData = new FormData();
                 const opts = { filename: fname, contentType: 'application/x-zip-compressed' };
                 formData.append('assetfile', zipbuff, opts);
 
-                const url = encodeURI(node.host + '/Marti/sync/missionupload?hash=' + msg.hash + '&filename=' + fname + '&creatorUid=' + node.uuid);
-                axios({
-                    method: 'post',
-                    url: url,
-                    headers: formData.getHeaders(),
-                    data: formData
-                })
-                    .then(function (response) {
-                        const urlp = encodeURI(node.host + '/Marti/api/sync/metadata/' + msg.hash + '/tool');
-                        var priv = (msg.sendTo === "public") ? "public" : "private";
-                        axios({
-                            method: 'put',
-                            url: urlp,
-                            data: priv
-                        })
-                            .then(function (response) {
-                                if (priv === "private") {
-                                    const start = new Date().toISOString();
-                                    const stale = new Date(new Date().getTime() + (10000)).toISOString();
+                if (node?.host !== undefined && node?.host !== "") {
+                    const url = encodeURI(node.host + '/Marti/sync/missionupload?hash=' + msg.hash + '&filename=' + fname + '&creatorUid=' + node.uuid);
+                    axios({
+                        method: 'post',
+                        url: url,
+                        headers: formData.getHeaders(),
+                        data: formData
+                    })
+                        .then(function (response) {
+                            const urlp = encodeURI(node.host + '/Marti/api/sync/metadata/' + msg.hash + '/tool');
+                            var priv = (msg.sendTo === "public") ? "public" : "private";
+                            axios({
+                                method: 'put',
+                                url: urlp,
+                                data: priv
+                            })
+                                .then(function (response) {
+                                    if (priv === "private") {
+                                        const start = new Date().toISOString();
+                                        const stale = new Date(new Date().getTime() + (10000)).toISOString();
 
-                                    var m = `<event version="2.0" uid="${uuidv4()}" type="b-f-t-r" how="h-e" time="${start}" start="${start}" stale="${stale}">
-                                        <point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt || 9999999}" ce="9999999" le="9999999" />
-                                        <detail>
-                                        <fileshare filename="${fname}" senderUrl="${node.host}/Marti/sync/content?hash=${msg.hash}" sizeInBytes="${msg.len}" sha256="${msg.hash}" senderUid="${msg.uid}" senderCallsign="${msg.from}" name="${fnam}" />`
-                                    if (msg.sendTo !== "broadcast") {
-                                        var t = msg.sendTo;
-                                        if (!Array.isArray(t)) { t = [t]; }
-                                        m += '<marti>' + t.map(v => '<dest callsign="' + v + '"/>') + '</marti>';
+                                        var m = `<event version="2.0" uid="${uuidv4()}" type="b-f-t-r" how="h-e" time="${start}" start="${start}" stale="${stale}">
+                                            <point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt || 9999999}" ce="9999999" le="9999999" />
+                                            <detail>
+                                            <fileshare filename="${fname}" senderUrl="${node.host}/Marti/sync/content?hash=${msg.hash}" sizeInBytes="${msg.len}" sha256="${msg.hash}" senderUid="${msg.uid}" senderCallsign="${msg.from}" name="${fnam}" />`
+                                        if (msg.sendTo !== "broadcast") {
+                                            var t = msg.sendTo;
+                                            if (!Array.isArray(t)) { t = [t]; }
+                                            m += '<marti>' + t.map(v => '<dest callsign="' + v + '"/>') + '</marti>';
+                                        }
+                                        m += '</detail></event>';
+                                        node.log("DP: " + node.host + "/Marti/sync/content?hash=" + msg.hash);
+                                        msg.payload = m.replace(/>\s+</g, "><");
+                                        msg.topic = "b-f-t-r";
+                                        node.send(msg);
                                     }
-                                    m += '</detail></event>';
-                                    node.log("DP: " + node.host + "/Marti/sync/content?hash=" + msg.hash);
-                                    msg.payload = m.replace(/>\s+</g, "><");
-                                    msg.topic = "b-f-t-r";
-                                    node.send(msg);
-                                }
-                            })
-                            .catch(function (error) {
-                                node.error(error.message, error);
-                            })
-                    })
-                    .catch(function (error) {
-                        node.error(error.message, error);
-                    })
+                                })
+                                .catch(function (error) {
+                                    node.error(error.message, error);
+                                })
+                        })
+                        .catch(function (error) {
+                            node.error(error.message, error);
+                        })
+                }
+                else { node.error("TAK server host is undefined or empty", new Error("Invalid node host")); }
             }
             // Otherwise if it's a string maybe it's raw cot xml - or NMEA from GPS - or maybe a simple chat message
             else if (msg?.payload && typeof msg.payload === "string") {
@@ -291,7 +292,7 @@ module.exports = function (RED) {
             else if (msg?.payload && typeof msg.payload === "object" && !msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
                 node.lat = msg.payload.lat;
                 node.lon = msg.payload.lon;
-                if (msg.payload.hasOwnProperty("altft")) { node.alt = parseInt(msg.payload.alt * 0.3048); }
+                if (msg.payload.hasOwnProperty("altft")) { node.alt = parseInt(msg.payload.altft * 0.3048); }
                 if (msg.payload.hasOwnProperty("alt")) { node.alt = parseInt(msg.payload.alt); }
             }
             // Handle a generic worldmap style object
@@ -316,7 +317,7 @@ module.exports = function (RED) {
                     }
                     if (!msg.payload.cottype && msg.payload.SIDC) {
                         if (msg.payload.SIDC.substr(3,1) === '-') {
-                            msg.payload.SIDC = msg.payload.SIDC.replace("-", "P")
+                            msg.payload.SIDC = msg.payload.SIDC.substring(0, 3) + "P" + msg.payload.SIDC.substring(4);
                         }
                         var s = msg.payload.SIDC.split('-')[0].toUpperCase();
                         var t = s.substr(2,1);
@@ -387,8 +388,8 @@ module.exports = function (RED) {
                         // Find the Centroid of the object.
                         lineCentPoints.push([msg.payload.line[0].lat, msg.payload.line[0].lng]);
                         var lineCent = findCentroidOfPoints(lineCentPoints);
-                        msg.payload.lat = lineCent.geometry.coordinates[0];
-                        msg.payload.lon = lineCent.geometry.coordinates[1];
+                        msg.payload.lat = lineCent.geometry.coordinates[1];
+                        msg.payload.lon = lineCent.geometry.coordinates[0];
                     }
                     else if ("area" in msg.payload) {
                         // Polygon / Rectangle
@@ -409,8 +410,8 @@ module.exports = function (RED) {
                         // Find the Centroid of the object.
                         polyCentPoints.push([msg.payload.area[0].lat, msg.payload.area[0].lng]);
                         var polyCent = findCentroidOfPoints(polyCentPoints);
-                        msg.payload.lat = polyCent.geometry.coordinates[0];
-                        msg.payload.lon = polyCent.geometry.coordinates[1];
+                        msg.payload.lat = polyCent.geometry.coordinates[1];
+                        msg.payload.lon = polyCent.geometry.coordinates[0];
                     }
                     // console.log("SHAPE",shape)
                     if (shape.type === 'ellipse') {
@@ -436,7 +437,6 @@ module.exports = function (RED) {
                         var linkArrayXML = "";
 
                         for (var l = 0; l < shape.points.length; l++) {
-                            // linkArrayXML += `<link uid="${msg.payload.name}.l" point="${shape.points[l].lat},${shape.points[l].lon},${shape.points[l].alt || invalid}"/>\n`;
                             linkArrayXML += `<link point="${shape.points[l].lat},${shape.points[l].lon}"/>\n`;
                         }
 
@@ -453,11 +453,11 @@ module.exports = function (RED) {
                         }
 
                         if (shape.type === 'poly') {
-                            shapeXML += `<fillColor value="${convertWMtoCOTColour(shape.fillColor, shape.fillOpacity)}"/>`;
                             type = "u-d-f";
                             if (shape.points.length === 4) {
                                 type = "u-d-r";
                             }
+                            shapeXML += `<fillColor value="${convertWMtoCOTColour(shape.fillColor, shape.fillOpacity)}"/>`;
                         }
                     }
                 }
@@ -471,7 +471,7 @@ module.exports = function (RED) {
                 msg.payload = `<event version="2.0" uid="NRC-${msg.payload.name}" type="${type}" time="${st}" start="${st}" stale="${et}" how="h-e">
                     <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999" ce="9999999"/>
                     <detail>
-                        <takv device="${os.hostname()}" os="${os.platform()}" platform="NodeRedTAK" version="${ver}"/>
+                        <takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/>
                         <track course="${msg.payload?.bearing || msg.payload?.hdg || 0}" speed="${parseInt(msg.payload?.speed) || 0}"/>
                         <contact callsign="${msg.payload.name}"/>
                         ${linkXML}
@@ -515,9 +515,6 @@ module.exports = function (RED) {
         });
 
         node.on("close", function() {
-            // var tim = new Date().toISOString();
-            // var template = `<?xml version="1.0" encoding="utf-8" standalone="yes"?><event version="2.0" uid="${node.uuid}" type="t-x-d-d" how="h-g-i-g-o" time="${tim}" start="${tim}" stale="${tim}"><detail><link uid="${node.uuid}" relation="p-p" type="a-f-G-I-B" /></detail><point le="9999999" ce="9999999" hae="9999999" lon="0" lat="0" /></event>"`;
-            // node.send({payload:template});  // This never happens in time so not useful
             clearInterval(this.interval_id);
             if (RED.settings.verbose) { this.log(RED._("inject.stopped")); }
         });
@@ -560,7 +557,6 @@ module.exports = function (RED) {
     }
 
     var ais2sidc = function (aisType) {
-        //aisType = Number(aisType);
         if (aisType >= 100) { return "GNMPOHTH----"; }
         var aisType2 = aisToSidc2[aisType];
         if (aisType2 !== undefined) { return aisType2; }

@@ -18,7 +18,7 @@ directory - typically `~/.node-red`
 Registers a TAK gateway node and sets up a heartbeat.
 
 It must be connected to a TCP request node, configured to point to the TAK server tcp address and port
-(usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on "&lt;/event&gt;".
+(usually 8087 or 8089), set to return strings, <i>keep connection open</i> mode, and split on <code>&lt;/event&gt;</code>.
 
 ![TAK out and in Image](https://github.com/dceejay/pages/blob/master/TAKinout.png?raw=true)
 
@@ -42,7 +42,7 @@ To create or update a simple marker send a msg with the following property
 
 requires a `msg` containing the following properties
 
-- **sendTo** - *string | array* - can either be an individual TAK callsign, a comma separted list of callsigns, an array of callsigns, or **broadcast** to send to all users.
+- **sendTo** - *string | array* - can either be an individual TAK callsign, a comma separated list of callsigns, an array of callsigns, or **broadcast** to send to all users.
 - **payload** - *string* - the text of the message to send.
 
 ### Sending data packages...
@@ -74,9 +74,25 @@ To update the location of the gateway dynamically the node can accept a payload
 
 This should work almost directly with messages received from an email-in node for example - but you will need to add the recipients in the sendTo property and may need to filter out unwanted messages first.
 
+### Global Context Variables
+
+Both nodes maintain two shared global context lookup tables that can be used by other nodes in your flow:
+
+- **`_takgatewaycs`** - *object* - A map of callsign → uid. Given a TAK callsign, returns the corresponding device uid.
+- **`_takgatewayid`** - *object* - A map of uid → callsign. Given a TAK device uid, returns the corresponding callsign.
+
+These are updated automatically whenever a message is received or sent that contains both a callsign and a uid. They can be accessed in a function node using:
+
+```js
+var cs = global.get("_takgatewaycs");  // { "CALLSIGN": "uid-string", ... }
+var id = global.get("_takgatewayid");  // { "uid-string": "CALLSIGN", ... }
+```
+
+A third variable **`_takdphost`** is also set by the TAK-Registration node, storing the configured data package server URL.
+
 ## TAK-Ingest Node Usage
 
-This node can accept input direct from a TCP request node, configured to point to the TAK server tcp address and port (usually 8087 or 8089), set to return strings, *keep connection open* mode, and split on "&lt;/event&gt;". This can be same TCP node as used by the TAK-registration node above.
+This node can accept input direct from a TCP request node, configured to point to the TAK server tcp address and port (usually 8087 or 8089), set to return strings, *keep connection open* mode, and split on <code>&lt;/event&gt;</code>. This can be same TCP node as used by the TAK-registration node above.
 
 It will produce a well formatted JSON object containing the event. It is returned as **msg.payload.event**
 

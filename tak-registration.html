@@ -17,7 +17,6 @@
     </div>
     <div class="form-row">
         <label for="node-input-group"><i class="fa fa-users"></i> Group</label>
-        <!-- <input type="text" id="node-input-group" placeholder="Group (if any)"> -->
         <select id="node-input-group">
             <option value="Cyan">Cyan</option>
             <option value="Yellow">Yellow</option>
@@ -36,7 +35,6 @@
     </div>
     <div class="form-row">
         <label for="node-input-role"><i class="fa fa-crosshairs"></i> Role</label>
-        <!-- <input type="text" id="node-input-group" placeholder="Group (if any)"> -->
         <select id="node-input-role">
             <option value="Gateway">Gateway</option>
             <option value="Team Member">Team Member</option>
@@ -93,27 +91,27 @@
         outputs: 1,
         paletteLabel: "TAK gateway",
         label: function() {
-            return "TAK gateway" || this.name;
+            return this.name || "TAK gateway";
         },
         oneditprepare: function() {
             var r = "s";
             var c = this.repeat;
-            if (this.repeat % 60 === 0) { r = "m"; c = c/60; }
-            if (this.repeat % 1440 === 0) { r = "h"; c = c/60; }
+            if (this.repeat % 3600 === 0) { r = "h"; c = this.repeat / 3600; }
+            else if (this.repeat % 60 === 0) { r = "m"; c = this.repeat / 60; }
+            else { r = "s"; c = this.repeat; }
             $("#inject-time-interval-count").val(c);
             $("#inject-time-interval-units").val(r);
-            $("#inject-time-interval-days").prop("disabled","disabled");
         },
         oneditsave: function() {
             var repeat = "";
             var count = $("#inject-time-interval-count").val();
             var units = $("#inject-time-interval-units").val();
-            if (units == "s") {
+            if (units === "s") {
                 repeat = count;
             } else {
-                if (units == "m") {
+                if (units === "m") {
                     repeat = count * 60;
-                } else if (units == "h") {
+                } else if (units === "h") {
                     repeat = count * 60 * 60;
                 }
             }
@@ -150,7 +148,7 @@
     <h3>Sending simple GeoChat messages...</h3>
     <dl class="message-properties">
         <dt>sendTo <span class="property-type">string | array</span></dt>
-        <dd>can either be an individual TAK callsign, a comma separted list of callsigns, an array of callsigns,
+        <dd>can either be an individual TAK callsign, a comma separated list of callsigns, an array of callsigns,
             or <b>broadcast</b> to send to all users.</dd>
         <dt>payload <span class="property-type">string</span></dt>
         <dd>the text of the message to send.</dd>
@@ -170,8 +168,8 @@
     <h3>Updating gateway position...</h3>
     <dl class="message-properties">
         <dt>payload <span class="property-type">string | object</span></dt>
-        <dd>Either an NMEA string starting `$GPGGA`, for example from a locally attached serial GPS, or an object
-            containing `lat` and `lon` and optional `alt` properties - but **no** name property.</dd>
+        <dd>Either an NMEA string starting <code>$GPGGA</code>, for example from a locally attached serial GPS, or an object
+            containing <code>lat</code> and <code>lon</code> and optional <code>alt</code> properties - but <b>no</b> <code>name</code> property.</dd>
     </dl>
     <h3>Details</h3>
     <p>This should work almost directly with messages received from an email-in node for example -

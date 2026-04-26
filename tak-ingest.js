@@ -1,4 +1,4 @@
-const { XMLParser, XMLBuilder, XMLValidator} = require("fast-xml-parser");
+const { XMLParser } = require("fast-xml-parser");
 const axios = require('axios').default;
 var Long = require('long').Long;
 var protobuf = require('protobufjs');
@@ -17,12 +17,12 @@ module.exports = function(RED) {
     function TakIngestNode(n) {
         RED.nodes.createNode(this,n);
         var node = this;
-        var global = this.context().global;
+        var globalContext = this.context().global;
         const parser = new XMLParser(fastXmlOptions);
 
         var handleProtoBuf = function(msg) {
             protobuf.load(path.join(__dirname,"proto/takmessage.proto"), function (err, root) {
-                if (err) { node.error(err); }
+                if (err) { node.error(err); return;}
                 var m = root.lookupType("atakmap.commoncommo.protobuf.v1.TakMessage");
                 var m3;
                 try {
@@ -31,16 +31,18 @@ module.exports = function(RED) {
                 }
                 catch(e) { node.error("Protobuf decode "+e,msg); return; }
 
+                if (!m3) { node.error("Protobuf: no cotEvent in decoded message", msg); return; }
+
                 // Add any unique ID/callsigns to some global variables just in case it's useful for later.
                 if (m3.detail?.contact?.callsign && m3.uid) {
-                    var a = global.get("_takgatewaycs") || {};
+                    var a = globalContext.get("_takgatewaycs") || {};
                     var c = a[m3.detail.contact.callsign];
                     a[m3.detail.contact.callsign] = m3.uid;
-                    global.set("_takgatewaycs", a);
-                    var b = global.get("_takgatewayid") || {};
+                    globalContext.set("_takgatewaycs", a);
+                    var b = globalContext.get("_takgatewayid") || {};
                     if (c) { delete b[c]; }
                     b[m3.uid] = m3.detail.contact.callsign;
-                    global.set("_takgatewayid", b);
+                    globalContext.set("_takgatewayid", b);
                 }
 
                 node.send({
@@ -82,7 +84,7 @@ module.exports = function(RED) {
                     return;
                 }
             }
-            else if (typeof(msg.payload) !== "string") {
+            else if (typeof msg.payload  !== "string") {
                 node.error("Input is not a string.",msg);
                 return;
             }
@@ -100,40 +102,44 @@ module.exports = function(RED) {
             msg.payload = parser.parse(msg.payload);
             // Add any unique ID/callsigns to some global variables just in case it's useful for later.
             if (msg.payload?.event?.detail?.contact?.callsign && msg.payload?.event?.uid) {
-                var a = global.get("_takgatewaycs") || {};
+                var a = globalContext.get("_takgatewaycs") || {};
                 var c = a[msg.payload.event.detail.contact.callsign];
                 a[msg.payload.event.detail.contact.callsign] = msg.payload.event.uid;
-                global.set("_takgatewaycs", a);
-                var b = global.get("_takgatewayid") || {};
+                globalContext.set("_takgatewaycs", a);
+                var b = globalContext.get("_takgatewayid") || {};
                 if (c) { delete b[c]; }
                 b[msg.payload.event.uid] = msg.payload.event.detail.contact.callsign;
-                global.set("_takgatewayid", b);
+                globalContext.set("_takgatewayid", b);
             }
             if (msg.payload?.event?.type) { msg.topic = msg.payload.event.type; }
             if (msg.payload?.event?.detail?.fileshare) {
                 msg.filename = msg.payload.event.detail.fileshare.filename;
-                axios({
-                    method: 'get',
-                    url: msg.payload.event.detail.fileshare.senderUrl,
-                    headers: { 'Accept': 'application/zip' },
-                    responseType: 'arraybuffer'
-                    })
-                    .then(function (response) {
-                        msg.datapackage = Buffer.from(response.data);
-                        node.send(msg);
-                    })
-                    .catch(function (error) {
-                        node.error(error.message, error);
-                        node.send(msg);
-                    })
+                if (msg.payload.event.detail.fileshare.senderUrl.indexOf("http") === 0) {
+                    axios({
+                        method: 'get',
+                        url: msg.payload.event.detail.fileshare.senderUrl,
+                        headers: { 'Accept': 'application/zip' },
+                        responseType: 'arraybuffer'
+                        })
+                        .then(function (response) {
+                            msg.datapackage = Buffer.from(response.data);
+                            node.send(msg);
+                        })
+                        .catch(function (error) {
+                            node.error(error.message, error);
+                            node.send(msg);
+                        })
+                }
+                else {
+                    node.error("fileshare senderUrl is not a valid http URL", msg);
+                    node.send(msg); // send the message anyway but without the datapackage
+                }
             }
             else {
                 node.send(msg);
             }
         });
 
-        node.on("close", function() {
-        });
     }
 
     RED.nodes.registerType("tak ingest", TakIngestNode);
