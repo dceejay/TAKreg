@@ -1,3 +1,10 @@
+/**
+ * @file tak-registration.js
+ * @description Node-RED node for TAK (Team Awareness Kit) gateway registration and message handling.
+ * Manages heartbeat registration, data package uploads, geochat messages, CoT (Cursor on Target)
+ * XML generation, and Worldmap object conversion for TAK-compatible clients.
+ */
+
 module.exports = function (RED) {
     "use strict";
     const os = require('os');
@@ -9,11 +16,31 @@ module.exports = function (RED) {
     const turfpolygon = require("@turf/helpers").polygon;
     const turfcentroid = require("@turf/centroid");
     const ver = require('./package.json').version;
+
+    /** @type {string[]} Valid TAK team/group colour names */
     const teamList = ["Cyan", "Red", "Green", "Blue", "Magenta", "Yellow", "Orange", "Maroon", "Purple", "Dark Blue", "Dark Green", "Teal", "Brown"];
 
+    /**
+     * TAK Registration Node constructor. Sets up a Node-RED node that acts as a TAK gateway,
+     * handling heartbeat registration, CoT message generation, data package uploads, and geochat.
+     *
+     * @constructor
+     * @param {object} n - Node configuration object provided by Node-RED
+     * @param {string} n.group - TAK team/group name
+     * @param {string} [n.role="Gateway"] - Role of this node on the TAK network (e.g. "Gateway", "Team Member")
+     * @param {string} [n.ntype="a-f-G-I-B"] - CoT type string for gateway nodes
+     * @param {number} n.latitude - Latitude of this gateway
+     * @param {number} n.longitude - Longitude of this gateway
+     * @param {string} n.callsign - TAK callsign for this gateway
+     * @param {number} n.repeat - Heartbeat interval in seconds
+     * @param {string} n.dphost - TAK server host URL for data package uploads
+     */
     function TakRegistrationNode(n) {
         RED.nodes.createNode(this, n);
+
+        /** @type {number} Sentinel value used for unknown/invalid altitude or error coordinates */
         const invalid = 9999999;
+
         this.group = n.group;
         this.role = n.role || "Gateway";
         this.ntype = n.ntype || "a-f-G-I-B";
@@ -22,31 +49,63 @@ module.exports = function (RED) {
         this.callsign = n.callsign;
         this.repeat = n.repeat;
         this.host = n.dphost;
+
+        /**
+         * Unique gateway UUID derived from the node ID using MD5, prefixed with "GATEWAY-".
+         * Used to identify this node on the TAK network.
+         * @type {string}
+         */
         this.uuid = "GATEWAY-" + (crypto.createHash('md5').update(Buffer.from(this.id)).digest('hex')).slice(0, 16);
+
         var node = this;
+
+        /** @type {number} Current altitude in metres; initialised to the invalid sentinel value */
         node.alt = invalid;
+
         var globalContext = this.context().global;
+
+        // Store gateway UUID→callsign and callsign→UUID mappings in global context
+        // so other nodes can look up gateway identities.
         var g = {};
         g[node.uuid] = node.callsign;
         globalContext.set("_takgatewayid", g);
+
         var gr = {};
         gr[node.callsign] = node.uuid;
         globalContext.set("_takgatewaycs", gr);
+
         globalContext.set("_takdphost", node.host);
 
+        // Non-gateway roles use the individual/crew member CoT type
         if (node.role !== "Gateway") { node.ntype = "a-f-G-U-C" }
 
+        // Guard against excessively long heartbeat intervals (setInterval max safe value)
         if (node.repeat > 2147483) {
             node.error("TAK Heartbeat interval is too long.");
             delete node.repeat;
         }
 
+        /**
+         * Converts a web-map hex colour and optional opacity into a KML-compatible ARGB hex string.
+         *
+         * @param {string} colour - Hex colour string without leading '#' (e.g. "FF0000")
+         * @param {number} [opacity=100] - Opacity as a percentage (0–100)
+         * @returns {string} KML ARGB hex string (e.g. "ff910000")
+         */
         var convertWMtoKMLColour = function (colour, opacity) {
             if (opacity === undefined) { opacity = 100; }
             var alfa = parseInt(opacity * 255 / 100).toString(16);
             return alfa + colour;
         };
 
+        /**
+         * Converts a web-map hex colour and optional opacity into a signed 32-bit integer
+         * as used by CoT (Cursor on Target) colour fields.
+         *
+         * @param {string} colour - Hex colour string without leading '#' (e.g. "FF0000")
+         * @param {number} [opacity] - Opacity as a percentage (0–100); defaults to fully opaque (0xFF) if omitted
+         * @returns {number} Signed 32-bit integer ARGB colour value
+         */
         var convertWMtoCOTColour = function (colour, opacity) {
             var c;
             if (opacity !== undefined) {
@@ -58,6 +117,14 @@ module.exports = function (RED) {
             return c.readInt32BE()
         };
 
+        /**
+         * Calculates the geographic centroid of an array of [lat, lng] coordinate pairs.
+         * Pads the array to at least 4 points (by repeating the first point) if necessary,
+         * as required by the Turf.js polygon helper.
+         *
+         * @param {Array<[number, number]>} points - Array of [latitude, longitude] pairs
+         * @returns {import('@turf/helpers').Feature<import('@turf/helpers').Point>} GeoJSON Point feature at the centroid
+         */
         var findCentroidOfPoints = function (points) {
             while (points.length < 4) { points.push(points[0]); } // pad if necessary (needs 4 points minimum)
             var poly = turfpolygon([points]);
@@ -65,6 +132,13 @@ module.exports = function (RED) {
             return centroid;
         };
 
+        /**
+         * Emits a synthetic input event on this node to trigger the heartbeat registration handler.
+         * The event payload includes current position, group, role, and a `heartbeat: true` flag
+         * so the input handler knows to generate a TAK registration CoT message.
+         *
+         * @returns {void}
+         */
         var sendIt = function () {
             node.emit("input", {
                 time: new Date().toISOString(),
@@ -80,6 +154,12 @@ module.exports = function (RED) {
             });
         };
 
+        /**
+         * Starts the periodic heartbeat interval that broadcasts this gateway's presence
+         * to the TAK network at the configured repeat interval.
+         *
+         * @returns {void}
+         */
         node.repeaterSetup = function () {
             const intervalMs = node.repeat * 1000;
             if (RED.settings.verbose) {
@@ -88,9 +168,37 @@ module.exports = function (RED) {
             node.interval_id = setInterval(sendIt, intervalMs);
         };
 
+        // Start the heartbeat repeater and send an initial registration after a short delay
         node.repeaterSetup();
         setTimeout(sendIt, 2500);
 
+        /**
+         * Main input handler. Processes incoming Node-RED messages and routes them based
+         * on their content to one of several TAK output formats:
+         *
+         * - `msg.heartbeat === true`       → CoT gateway registration/heartbeat XML
+         * - `msg.filename` + Buffer payload → Normalised to attachment format, then falls through
+         * - `msg.attachments`              → TAK Data Package (ZIP + manifest), uploaded via Marti API
+         * - `msg.payload` is XML string    → Passed through directly as CoT
+         * - `msg.payload` starts `$GPGGA` → NMEA GPS sentence; updates node lat/lon/alt
+         * - `msg.payload` string + sendTo  → GeoChat message(s) to specified callsign(s)
+         * - `msg.payload` object, no name  → Position update for this gateway node
+         * - `msg.payload` object with name → Worldmap-style marker/shape → CoT XML
+         * - `msg.payload` object with event→ Round-trip CoT JSON back to XML
+         *
+         * @param {object} msg - Node-RED message object
+         * @param {boolean} [msg.heartbeat] - Set to true for internal heartbeat messages
+         * @param {Buffer}  [msg.payload] - Raw file buffer (when used with msg.filename)
+         * @param {string}  [msg.filename] - File path; triggers single-attachment normalisation
+         * @param {Array}   [msg.attachments] - Array of `{filename, content}` objects for data packages
+         * @param {string}  [msg.sendTo] - Target TAK callsign(s) for chat or data package delivery
+         * @param {string}  [msg.from] - Sender callsign override (defaults to node callsign)
+         * @param {string}  [msg.topic] - Message topic / data package name
+         * @param {number}  [msg.lat] - Latitude override
+         * @param {number}  [msg.lon] - Longitude override
+         * @param {number}  [msg.alt] - Altitude override in metres
+         * @param {string}  [msg.remarks] - Freetext remarks to include in CoT detail
+         */
         node.on("input", function (msg) {
             if (msg?.heartbeat) {  // Register gateway and do the heartbeats
                 var template = `<event version="2.0" uid="${node.uuid}" type="${msg.type}" how="h-e" time="${msg.time}" start="${msg.time}" stale="${msg.etime}"><point lat="${msg.lat}" lon="${msg.lon}" hae="${msg.alt}" ce="9999999" le="9999999"/><detail><takv device="${os.hostname()}" os="${os.platform()}" platform="NRedTAK" version="${ver}"/><contact endpoint="*:-1:stcp" callsign="${msg.callsign}"/><uid Droid="${msg.callsign}"/><__group name="${msg.group}" role="${msg.role}"/><status battery="99"/><track course="0" speed="0"/></detail></event>`;
@@ -98,6 +206,7 @@ module.exports = function (RED) {
                 node.status({ fill: "green", shape: "dot", text: node.repeat + "s - " + node.callsign });
                 return;
             }
+
             // if it's just a simple filename and buffer payload then make it look like an attachment etc...
             if (msg?.payload && msg.hasOwnProperty("filename") && Buffer.isBuffer(msg.payload) && !msg.hasOwnProperty("attachments")) {
                 msg.attachments = [{
@@ -108,23 +217,33 @@ module.exports = function (RED) {
                 delete msg.filename;
                 delete msg.payload;
             }
+
             // If there are attachments handle them first. (Datapackage)
             if (msg?.attachments && Array.isArray(msg.attachments) && msg.attachments.length > 0) {
                 if (!msg.sendTo) { node.error("Missing 'sendTo' user TAK callsign property.", msg); return; }
+
+                // Generate a deterministic UUID for this data package based on the topic string
                 var UUID = uuidv5(msg.topic, 'd5d4a57d-48fb-58b6-93b8-d9fde658481a');
                 var fnam = msg.topic || msg.attachments[0].filename.split('.')[0];
                 var fname = fnam + '.zip';
                 var da = new Date();
+
+                // Build a timestamp-based sender callsign suffix (DDTHHMMSS)
                 var dn = da.toISOString().split('-')[2].split('.')[0];
                 var calls = msg.from || node.callsign;
                 calls = calls + '.' + dn.split('T')[0] + '.' + dn.split('T')[1].split(':').join('');
+
+                // Begin building the Mission Package Manifest XML
                 var mf = `<MissionPackageManifest version="2"><Configuration>
                 <Parameter name="uid" value="${UUID}"/>
                 <Parameter name="name" value="${msg.topic}"/>
                 <Parameter name="onReceiveImport" value="true"/>
                 <Parameter name="callsign" value="${calls}"/>
                 </Configuration><Contents>\n`;
+
                 var zip = new AdmZip();
+
+                // Add each attachment to the ZIP, keyed by its MD5 hash
                 for (var i = 0; i < msg.attachments.length; i++) {
                     var data;
                     if (Buffer.isBuffer(msg.attachments[i].content)) {
@@ -142,6 +261,7 @@ module.exports = function (RED) {
                     mf += `<Content ignore="false" zipEntry="${fhash}"><Parameter name="uid" value="${UUID}"/></Content>\n`;
                 }
 
+                // If coordinates are provided, embed a CoT item CoT XML inside the package
                 if (msg.hasOwnProperty("lat") && msg.hasOwnProperty("lon")) {
                     var timeo = new Date(Date.now() + (1000*60*60*4)).toISOString(); // stale time to 4 hours
                     var cott = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -168,6 +288,7 @@ module.exports = function (RED) {
                 zip.addFile('MANIFEST/manifest.xml', Buffer.from(mf, 'utf8'), msg.topic);
                 var zipbuff = zip.toBuffer();
 
+                // Build the upload metadata object
                 msg = {
                     from: msg.from || node.callsign || "Anonymous",
                     sendTo: msg.sendTo,
@@ -186,6 +307,7 @@ module.exports = function (RED) {
                 formData.append('assetfile', zipbuff, opts);
 
                 if (node?.host !== undefined && node?.host !== "") {
+                    // Upload the data package ZIP to the TAK server via the Marti sync API
                     const url = encodeURI(node.host + '/Marti/sync/missionupload?hash=' + msg.hash + '&filename=' + fname + '&creatorUid=' + node.uuid);
                     axios({
                         method: 'post',
@@ -194,6 +316,7 @@ module.exports = function (RED) {
                         data: formData
                     })
                         .then(function (response) {
+                            // Set the visibility (public / private) of the uploaded package
                             const urlp = encodeURI(node.host + '/Marti/api/sync/metadata/' + msg.hash + '/tool');
                             var priv = (msg.sendTo === "public") ? "public" : "private";
                             axios({
@@ -203,6 +326,7 @@ module.exports = function (RED) {
                             })
                                 .then(function (response) {
                                     if (priv === "private") {
+                                        // Send a file-share CoT event to notify the recipient(s)
                                         const start = new Date().toISOString();
                                         const stale = new Date(new Date().getTime() + (10000)).toISOString();
 
@@ -232,14 +356,16 @@ module.exports = function (RED) {
                 }
                 else { node.error("TAK server host is undefined or empty", new Error("Invalid node host")); }
             }
+
             // Otherwise if it's a string maybe it's raw cot xml - or NMEA from GPS - or maybe a simple chat message
             else if (msg?.payload && typeof msg.payload === "string") {
-                if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) { // Assume it's proper XML event so pass straight through
+                if (msg.payload.trim().startsWith('<') && msg.payload.trim().endsWith('>')) {
+                    // Assume it's proper XML event so pass straight through
                     msg.topic = msg.payload.split('type="')[1].split('"')[0];
                     node.send(msg);
                 }
-                else if (msg.payload.trim().startsWith('$GPGGA')) { // maybe it's an NMEA string
-                    // console.log("It's NMEA",msg.payload);
+                else if (msg.payload.trim().startsWith('$GPGGA')) {
+                    // Parse an NMEA GGA sentence and update the node's current position
                     var nm = msg.payload.trim().split(',');
                     if (nm[0] === '$GPGGA' && nm[6] > 0) {
                         const la = parseInt(nm[2].substr(0, 2)) + parseFloat(nm[2].substr(2)) / 60;
@@ -250,8 +376,7 @@ module.exports = function (RED) {
                     }
                 }
                 else if (msg.hasOwnProperty("sendTo")) {
-                    // simple text payload and no attachments so guess it's a chat message...
-                    // node.log("Geochat to " + msg.sendTo);
+                    // Simple text payload with no attachments — treat as a geochat message
                     if (!Array.isArray(msg.sendTo)) { msg.sendTo = msg.sendTo.split(','); }
                     const start = new Date().toISOString();
                     const stale = new Date(new Date().getTime() + (10000)).toISOString();
@@ -259,6 +384,7 @@ module.exports = function (RED) {
                     const type = "a-f-G-I-B";
                     var par = '';
 
+                    // Send an individual chat CoT event for each recipient in sendTo
                     for (var t = 0; t < msg.sendTo.length; t++) {
                         var m = RED.util.cloneMessage(msg);
                         const to = m.sendTo[t];
@@ -281,13 +407,13 @@ module.exports = function (RED) {
             <track speed="0" course="0"/>
         </detail>
     </event>`;
-                        // console.log(xm);
                         m.payload = xm.replace(/>\s+</g, "><");
                         m.topic = "b-t-f";
                         node.send(m);
                     }
                 }
             }
+
             // Just has lat, lon (and alt) but no name - assume it's our local position we're updating
             else if (msg?.payload && typeof msg.payload === "object" && !msg.payload.hasOwnProperty("name") && msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
                 node.lat = msg.payload.lat;
@@ -295,6 +421,7 @@ module.exports = function (RED) {
                 if (msg.payload.hasOwnProperty("altft")) { node.alt = parseInt(msg.payload.altft * 0.3048); }
                 if (msg.payload.hasOwnProperty("alt")) { node.alt = parseInt(msg.payload.alt); }
             }
+
             // Handle a generic worldmap style object
             else if (msg?.payload && typeof msg.payload === "object" && msg.payload.hasOwnProperty("name")) {
                 var shapeXML = ``;
@@ -312,9 +439,13 @@ module.exports = function (RED) {
                 // Handle simple markers
                 if (msg.payload.hasOwnProperty("lat") && msg.payload.hasOwnProperty("lon")) {
                     var type = msg.payload.cottype || "a-u-g-u";
+
+                    // Convert AIS vessel type to SIDC symbol code if no CoT type or SIDC given
                     if (!msg.payload.cottype && !msg.payload.SIDC && msg.payload.hasOwnProperty("aistype")) {
                         msg.payload.SIDC = ais2sidc(msg.payload.aistype);
                     }
+
+                    // Convert SIDC symbol code to CoT type and build military symbol XML
                     if (!msg.payload.cottype && msg.payload.SIDC) {
                         if (msg.payload.SIDC.substr(3,1) === '-') {
                             msg.payload.SIDC = msg.payload.SIDC.substring(0, 3) + "P" + msg.payload.SIDC.substring(4);
@@ -334,6 +465,7 @@ module.exports = function (RED) {
                         userIcon += '</__milsym>';
                     }
                     else if (msg.payload.hasOwnProperty("icon")) {
+                        // Map specific Worldmap icon names to TAK spot-map or custom iconset paths
                         if (msg.payload.icon === 'fa-circle fa-fw') {
                             type = 'b-m-p-s-m';
                             if (!msg.payload?.iconColor) { msg.payload.iconColor = "FFFF00"; }
@@ -346,15 +478,16 @@ module.exports = function (RED) {
                     }
                 }
 
-                // for markers that aren't us, then need to add a link tag
+                // For markers that aren't us, add a link tag back to this gateway
                 if (msg.payload.hasOwnProperty("name")) {
                     linkXML = `<link uid="${node.uuid}" production_time="${st}" type="${node.ntype}" parent_callsign="${node.callsign}" relation="p-p"/>`;
                 }
 
-                // Handle Worldmap drawing shapes
+                // Handle Worldmap drawing shapes (ellipse, line, polygon/rectangle)
                 if (msg.payload.hasOwnProperty("action") && msg.payload.action === "draw") {
                     ttl = 24 * 60 * 60 * 1000;  /// set TTL to 1 day for shapes...
 
+                    /** @type {{type: string, strokeColor: string, fillColor: string, fillOpacity: number, strokeWeight: number, radius?: object, points?: Array}} */
                     var shape = {
                         "strokeColor": (msg.payload.options.color || "910000").replace('#', ''),
                         "fillColor": (msg.payload.options.color || "910000").replace('#', ''),
@@ -363,7 +496,7 @@ module.exports = function (RED) {
                     };
 
                     if ("radius" in msg.payload) {
-                        // Ellipse
+                        // Ellipse: use the radius value for both major and minor axes (circle)
                         shape.type = "ellipse";
                         shape.radius = {
                             "major": msg.payload.radius,
@@ -371,7 +504,7 @@ module.exports = function (RED) {
                         };
                     }
                     else if ("line" in msg.payload) {
-                        // Line
+                        // Polyline: collect points and calculate centroid for the CoT anchor
                         delete shape.fillColor;
                         delete shape.fillOpacity;
                         shape.type = "line";
@@ -392,7 +525,7 @@ module.exports = function (RED) {
                         msg.payload.lon = lineCent.geometry.coordinates[0];
                     }
                     else if ("area" in msg.payload) {
-                        // Polygon / Rectangle
+                        // Polygon or rectangle: collect points and calculate centroid
                         shape.type = "poly";
                         shape.points = [];
                         var polyCentPoints = [];
@@ -413,7 +546,7 @@ module.exports = function (RED) {
                         msg.payload.lat = polyCent.geometry.coordinates[1];
                         msg.payload.lon = polyCent.geometry.coordinates[0];
                     }
-                    // console.log("SHAPE",shape)
+
                     if (shape.type === 'ellipse') {
                         type = "u-d-c-c";
 
@@ -436,6 +569,7 @@ module.exports = function (RED) {
                     else if (shape.type === 'line' || shape.type === 'poly') {
                         var linkArrayXML = "";
 
+                        // Build link point elements for each vertex of the shape
                         for (var l = 0; l < shape.points.length; l++) {
                             linkArrayXML += `<link point="${shape.points[l].lat},${shape.points[l].lon}"/>\n`;
                         }
@@ -454,6 +588,7 @@ module.exports = function (RED) {
 
                         if (shape.type === 'poly') {
                             type = "u-d-f";
+                            // Use rectangle type for 4-sided polygons
                             if (shape.points.length === 4) {
                                 type = "u-d-r";
                             }
@@ -465,9 +600,11 @@ module.exports = function (RED) {
                 var et = Date.now() + ttl;
                 et = (new Date(et)).toISOString();
 
+                // Normalise altitude: convert feet suffix strings and altft property to metres
                 if (msg.payload?.alt && typeof msg.payload.alt === "string" && msg.payload.alt.indexOf("ft") > -1) { msg.payload.alt = parseInt(msg.payload.alt) * 0.3048; }
                 if (msg.payload?.altft && !msg.payload.alt) { msg.payload.alt = parseInt(msg.payload.altft) * 0.3048; }
 
+                // Build and emit the final CoT event XML for the worldmap object
                 msg.payload = `<event version="2.0" uid="NRC-${msg.payload.name}" type="${type}" time="${st}" start="${st}" stale="${et}" how="h-e">
                     <point lat="${msg.payload.lat || 0}" lon="${msg.payload.lon || 0}" hae="${parseInt(msg.payload.alt || invalid)}" le="9999999" ce="9999999"/>
                     <detail>
@@ -488,6 +625,7 @@ module.exports = function (RED) {
             // Maybe a simple event json update (eg from an ingest - tweak and send back)
             // Note this is not 100% reverse of the ingest... but seems to work mostly...
             else if (msg?.payload && typeof msg.payload === "object" && msg.payload.hasOwnProperty("event")) {
+                // Reconstruct CoT XML from a parsed event object (e.g. from the TAK ingest node)
                 const ev = msg.payload.event;
                 msg.topic = ev.type;
                 msg.payload = `<event version="${ev.version}" uid="${ev.uid}" type="${ev.type}" time="${ev.time}" start="${ev.start}" stale="${ev.stale}" how="${ev.how}">
@@ -514,12 +652,23 @@ module.exports = function (RED) {
             }
         });
 
+        /**
+         * Cleanup handler called when the node is stopped or redeployed.
+         * Clears the heartbeat interval timer.
+         */
         node.on("close", function() {
             clearInterval(this.interval_id);
             if (RED.settings.verbose) { this.log(RED._("inject.stopped")); }
         });
     }
 
+    /**
+     * Lookup table mapping AIS vessel type codes (single-digit / tens-digit bucket)
+     * to their corresponding SIDC symbol codes for general vessel classes.
+     * Used as a fallback when `aisToSidc2` has no exact match.
+     *
+     * @type {Object.<number, string>}
+     */
     var aisToSidc1 = {
         0: "SASPX-------",
         4: "SASPXA------",
@@ -530,6 +679,13 @@ module.exports = function (RED) {
         9: "SASPXM------"
     }
 
+    /**
+     * Lookup table mapping specific AIS vessel type codes to their SIDC symbol codes.
+     * Covers common vessel categories (fishing, tug, cargo, tanker, etc.).
+     * Consulted before `aisToSidc1` for more precise classification.
+     *
+     * @type {Object.<number, string>}
+     */
     var aisToSidc2 = {
         0: "SASPX-------",
         30: "SASPXF------",
@@ -556,6 +712,15 @@ module.exports = function (RED) {
         90: "SASPXM------",
     }
 
+    /**
+     * Converts an AIS vessel type integer to a MIL-STD-2525 SIDC symbol code string.
+     * Codes ≥ 100 are treated as non-standard/other and mapped to a generic symbol.
+     * First checks `aisToSidc2` for an exact match, then falls back to `aisToSidc1`
+     * using the tens digit, and finally returns a default unknown surface symbol.
+     *
+     * @param {number} aisType - AIS vessel type code (0–255)
+     * @returns {string} 12-character SIDC symbol code
+     */
     var ais2sidc = function (aisType) {
         if (aisType >= 100) { return "GNMPOHTH----"; }
         var aisType2 = aisToSidc2[aisType];
